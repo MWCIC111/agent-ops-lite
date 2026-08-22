@@ -16,7 +16,8 @@ random.seed(42)
 
 # ---------------- 基础配置 ----------------
 
-AGENTS = ["researcher", "lab-assistant", "knowledge-rag", "data-analyst"]
+# 4 个垂直 Agent（与 7_Agent拓扑.py 的节点命名完全一致，保证跨页联动自洽）
+AGENTS = ["规划 Agent", "检索 Agent", "推理 Agent", "校验 Agent"]
 
 # 每 1K token 价格（美元）：(input, output)
 MODEL_PRICE = {
@@ -25,17 +26,17 @@ MODEL_PRICE = {
     "qwen-plus": (0.0004, 0.0012),
 }
 
-TOOLS = ["web_search", "db_query", "api_call", "code_exec", "rag_retrieve"]
+TOOLS = ["网页搜索", "数据库查询", "接口调用", "代码执行", "知识库检索"]
 
 # Agent 执行链的步骤模板：(步骤名, 模型, 调用的工具)
 STEP_TEMPLATES = [
-    ("intent", "qwen-plus", None),
-    ("plan", "gpt-4o", None),
-    ("retrieve", "qwen-plus", "rag_retrieve"),
-    ("tool_call", "gpt-4o", "api_call"),
-    ("query", "qwen-plus", "db_query"),
-    ("execute", "gpt-4o", "code_exec"),
-    ("generate", "qwen-max", None),
+    ("意图识别", "qwen-plus", None),
+    ("任务规划", "gpt-4o", None),
+    ("知识检索", "qwen-plus", "知识库检索"),
+    ("工具调用", "gpt-4o", "接口调用"),
+    ("数据查询", "qwen-plus", "数据库查询"),
+    ("代码执行", "gpt-4o", "代码执行"),
+    ("内容生成", "qwen-max", None),
 ]
 
 # ---------------- 数据结构 ----------------
@@ -84,7 +85,7 @@ def _gen_step(template: tuple[str, str, str | None], fail: bool) -> Step:
     latency = random.randint(150, 3000)
     if fail:
         return Step(name, model, tool, tok_in, tok_out, latency, "error",
-                    error=random.choice(["tool_timeout", "invalid_response", "rate_limit"]))
+                    error=random.choice(["工具超时", "响应格式错误", "限流触发"]))
     return Step(name, model, tool, tok_in, tok_out, latency, "success")
 
 

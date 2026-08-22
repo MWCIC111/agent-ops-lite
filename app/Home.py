@@ -7,6 +7,8 @@
 总览页支持两种模式：
     · 静态模式：近 14 天聚合视图（默认）
     · Live 实时模式：每 1 秒模拟新调用流入，KPI 与趋势图实时滚动
+顶部系统状态横幅汇总跨页联动：拓扑异常 / 配额熔断 / 发布决策 / 灰度进度，
+一屏看到全系统健康度（模拟真实生产中所有面板读同一个后端）。
 """
 import random
 from datetime import datetime
@@ -15,7 +17,10 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from demo_data import load_demo_traces
+from demo_data import AGENTS, load_demo_traces
+from shared_state import init as sim_init, get as sim_get
+
+sim_init()
 
 st.set_page_config(page_title="agent-ops-lite · 总览", layout="wide")
 
@@ -41,8 +46,35 @@ df = pd.DataFrame(rows)
 st.title("agent-ops-lite · 总览 v0.1.0")
 st.caption("Agent 调用可观测面板（模拟数据）—— 接入真实数据源即可用于生产")
 
+# ---------- 系统状态横幅（跨页联动汇总）----------
+sim = sim_get()
+status_parts = []
+if sim["abnormal_agent"]:
+    status_parts.append(f"🔴 {sim['abnormal_agent']} 异常（拓扑页标记）")
+if sim["quota_breach"]:
+    status_parts.append("💰 成本配额熔断（成本核算页触发）")
+if sim["rolled_back"]:
+    status_parts.append("↩️ 已回滚到 v1.0（灰度发布页）")
+elif sim["canary_stage"] > 0:
+    canary_names = ["", "10% 小流量", "50% 半量", "100% 全量"]
+    status_parts.append(f"🚦 灰度放量中：{canary_names[sim['canary_stage']]}")
+if sim["release_decision"]:
+    status_parts.append(f"🎯 发布决策：{sim['release_decision']}（版本对比页）")
+
+if status_parts:
+    has_critical = sim["abnormal_agent"] or sim["quota_breach"] or sim["rolled_back"]
+    if has_critical:
+        st.error("🚨 **系统状态异常** —— " + "　|　".join(status_parts)
+                 + "　（点击左侧对应页面处理）", icon="🚨")
+    else:
+        st.info("ℹ️ **系统状态** —— " + "　|　".join(status_parts), icon="ℹ️")
+else:
+    st.success("✅ **系统状态：全部正常** —— 拓扑异常 / 配额熔断 / 发布决策 / 灰度进度跨页实时同步",
+               icon="✅")
+
 # ---------- 模式开关 ----------
 live = st.toggle("⚡ Live 实时模式（每 1 秒模拟新调用流入）", value=False)
+sim["live_on"] = live
 
 # ============================================================
 # Live 实时模式：fragment 每 1 秒自动重跑，数据滚动更新
@@ -61,7 +93,7 @@ if live:
         batch_size = random.randint(5, 10)
         new_rows = []
         for i in range(batch_size):
-            agent = random.choice(["researcher", "lab-assistant", "knowledge-rag", "data-analyst"])
+            agent = random.choice(AGENTS)
             status = random.choices(["success", "error"], weights=[0.88, 0.12])[0]
             tokens = random.randint(3000, 12000)
             latency_ms = random.randint(400, 5000)
@@ -109,7 +141,10 @@ if live:
         # 最新 Trace
         st.subheader("最新链路 Trace（实时）")
         st.dataframe(
-            win.tail(15)[["time", "trace_id", "agent", "status", "n_steps", "tokens", "latency_ms", "cost"]],
+            win.tail(15)[["time", "trace_id", "agent", "status", "n_steps", "tokens", "latency_ms", "cost"]]
+            .rename(columns={"time": "时间", "trace_id": "Trace ID", "agent": "Agent",
+                             "status": "状态", "n_steps": "步骤数", "tokens": "Token",
+                             "latency_ms": "耗时(ms)", "cost": "成本(¥)"}),
             width="stretch",
             hide_index=True,
         )
@@ -146,7 +181,10 @@ else:
     # 最新 Trace
     st.subheader("最新链路 Trace")
     st.dataframe(
-        df.head(20)[["time", "trace_id", "agent", "status", "n_steps", "tokens", "latency_ms", "cost"]],
+        df.head(20)[["time", "trace_id", "agent", "status", "n_steps", "tokens", "latency_ms", "cost"]]
+        .rename(columns={"time": "时间", "trace_id": "Trace ID", "agent": "Agent",
+                         "status": "状态", "n_steps": "步骤数", "tokens": "Token",
+                         "latency_ms": "耗时(ms)", "cost": "成本(¥)"}),
         width="stretch",
         hide_index=True,
     )

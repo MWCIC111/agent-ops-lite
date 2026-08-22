@@ -2,10 +2,18 @@
 
 对应简历卖点：生产化告警体系、异常定位从小时级缩短到分钟级。
 交互亮点：错误率超过阈值时面板本身"亮红灯"，演示告警规则的真实逻辑。
+联动设计：读取全局共享状态——若拓扑页标记了某个 Agent 异常，
+          本页会针对该 Agent 单独触发告警（模拟真实监控的 Agent 维度告警）。
 """
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from shared_state import init as sim_init, get as sim_get
+
+sim_init()
 
 from demo_data import load_demo_traces
 
@@ -27,7 +35,20 @@ rows = [
 ]
 df = pd.DataFrame(rows)
 
-# ---- 当前告警状态 ----
+# ---- ① 全局联动告警：拓扑页标记的异常 Agent ----
+ab = sim_get()["abnormal_agent"]
+if ab:
+    ab_df = df[df["agent"] == ab]
+    ab_rate = (ab_df["status"] == "failed").mean() if len(ab_df) else 0.0
+    st.error(
+        f"🚨 **联动告警（来自拓扑页）**：{ab} 被标记为异常，"
+        f"其历史失败率 {ab_rate:.1%} 已偏离健康基线——"
+        f"建议立即检查该 Agent 的模型服务与工具链路，配合 Trace ID 定位根因。"
+        f"（真实生产中：拓扑页异常标记来自监控告警，此处为全系统联动的模拟演示。）",
+        icon="🚨",
+    )
+
+# ---- ② 整体错误率告警 ----
 err_rate = (df["status"] == "failed").mean()
 if err_rate > 0.15:
     st.error(f"🔴 检测到整体错误率 {err_rate:.1%} > 15% 阈值 —— 触发告警，"
@@ -41,7 +62,8 @@ top10 = df.nlargest(10, "latency_ms")
 st.dataframe(
     top10[["time", "trace_id", "agent", "latency_ms", "status"]]
     .assign(latency_ms=lambda d: (d["latency_ms"] / 1000).round(2))
-    .rename(columns={"latency_ms": "耗时(s)", "status": "状态"}),
+    .rename(columns={"time": "时间", "trace_id": "Trace ID", "agent": "Agent",
+                     "latency_ms": "耗时(s)", "status": "状态"}),
     width="stretch",
     hide_index=True,
 )
@@ -67,7 +89,8 @@ st.subheader(f"失败 Trace（共 {len(failed)} 条）")
 st.dataframe(
     failed[["time", "trace_id", "agent", "latency_ms"]]
     .assign(latency_ms=lambda d: (d["latency_ms"] / 1000).round(2))
-    .rename(columns={"latency_ms": "耗时(s)"}),
+    .rename(columns={"time": "时间", "trace_id": "Trace ID", "agent": "Agent",
+                     "latency_ms": "耗时(s)"}),
     width="stretch",
     hide_index=True,
 )

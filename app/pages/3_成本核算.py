@@ -2,10 +2,18 @@
 
 对应简历卖点：成本核算与配额熔断（生产 Agent 上线绕不开的硬指标）。
 交互亮点：拖动"每日成本配额"滑杆，超限即触发熔断告警——把真实生产机制搬进 Demo。
+联动设计：熔断状态写入全局共享状态，首页顶部横幅会同步提示（模拟真实生产中
+          配额状态存在 Redis、所有面板统一读取）。
 """
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from shared_state import init as sim_init, get as sim_get
+
+sim_init()
 
 from demo_data import load_demo_traces
 
@@ -44,14 +52,19 @@ with c2:
 
 # ---- 成本配额熔断模拟 ----
 st.subheader("成本配额熔断（模拟）")
-quota = st.slider("每日成本配额（¥）", min_value=20, max_value=200, value=80, step=5)
+quota = st.slider("每日成本配额（¥）", min_value=10, max_value=200, value=80, step=5,
+                  help="今日成本约 ¥18（14 天模拟数据），把配额拖到 20 以下即可看到熔断效果")
 today = df["date"].max()
 today_cost = df[df["date"] == today]["cost"].sum()
 
+# 熔断结果写入全局共享状态（首页横幅会同步感知）
+sim_get()["quota"] = quota
 if today_cost > quota:
+    sim_get()["quota_breach"] = True
     st.error(f"⚠️ 今日成本 ¥{today_cost:.1f} 已超出配额 ¥{quota} —— "
              f"模拟触发熔断：拒绝新的 Agent 调用，仅保留高优先级任务。")
 else:
+    sim_get()["quota_breach"] = False
     st.success(f"今日成本 ¥{today_cost:.1f}，低于配额 ¥{quota}，运行正常。"
                f"（剩余额度 ¥{quota - today_cost:.1f}）")
 

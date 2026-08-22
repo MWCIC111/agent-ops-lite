@@ -34,11 +34,12 @@ agg = (
 )
 agg["成功率"] = (agg["成功次数"] / agg["调用次数"]).map("{:.1%}".format)
 agg["平均耗时s"] = (agg["平均耗时ms"] / 1000).round(2)
+agg = agg.rename(columns={"tool": "工具", "latency_ms": "latency_ms"})
 
 c1, c2 = st.columns(2)
 with c1:
     fig = px.bar(
-        agg, x="tool", y="调用次数", color="tool",
+        agg, x="工具", y="调用次数", color="工具",
         color_discrete_sequence=px.colors.qualitative.Set2,
     )
     fig.update_layout(height=360, margin=dict(t=10, b=10, l=10, r=10), showlegend=False,
@@ -46,7 +47,7 @@ with c1:
     st.plotly_chart(fig, width="stretch")
 with c2:
     fig2 = px.bar(
-        agg, x="tool", y="平均耗时ms", color="tool",
+        agg, x="工具", y="平均耗时ms", color="工具",
         color_discrete_sequence=px.colors.qualitative.Set2,
     )
     fig2.update_layout(height=360, margin=dict(t=10, b=10, l=10, r=10), showlegend=False,
@@ -55,7 +56,7 @@ with c2:
 
 st.subheader("工具明细")
 st.dataframe(
-    agg[["tool", "调用次数", "成功率", "平均耗时s", "平均耗时ms"]],
+    agg[["工具", "调用次数", "成功率", "平均耗时s", "平均耗时ms"]],
     width="stretch",
     hide_index=True,
 )
