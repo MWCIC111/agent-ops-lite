@@ -34,7 +34,7 @@ rows = [
 df = pd.DataFrame(rows)
 
 # ---------- 标题 ----------
-st.title("agent-ops-lite · 总览")
+st.title("agent-ops-lite · 总览 v0.1.0")
 st.caption("Agent 调用可观测面板（模拟数据）—— 接入真实数据源即可用于生产")
 
 # ---------- 4 个 KPI ----------
