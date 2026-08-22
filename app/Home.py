@@ -57,13 +57,13 @@ fig.update_layout(
     yaxis_title="调用量",
     xaxis_title="",
 )
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 # ---------- 最新 Trace ----------
 st.subheader("最新链路 Trace")
 st.dataframe(
     df.head(20)[["time", "trace_id", "agent", "status", "n_steps", "tokens", "latency_ms", "cost"]],
-    use_container_width=True,
+    width="stretch",
     hide_index=True,
 )
 

@@ -42,7 +42,7 @@ st.dataframe(
     top10[["time", "trace_id", "agent", "latency_ms", "status"]]
     .assign(latency_ms=lambda d: (d["latency_ms"] / 1000).round(2))
     .rename(columns={"latency_ms": "耗时(s)", "status": "状态"}),
-    use_container_width=True,
+    width="stretch",
     hide_index=True,
 )
 
@@ -59,7 +59,7 @@ fig.add_hline(y=0.15, line_dash="dash", line_color="#F09595",
               annotation_text="阈值 15%", annotation_position="top right")
 fig.update_layout(height=320, margin=dict(t=10, b=10, l=10, r=10),
                   xaxis_title="", yaxis_title="错误率")
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 # ---- 失败 Trace 列表 ----
 failed = df[df["status"] == "failed"]
@@ -68,6 +68,6 @@ st.dataframe(
     failed[["time", "trace_id", "agent", "latency_ms"]]
     .assign(latency_ms=lambda d: (d["latency_ms"] / 1000).round(2))
     .rename(columns={"latency_ms": "耗时(s)"}),
-    use_container_width=True,
+    width="stretch",
     hide_index=True,
 )

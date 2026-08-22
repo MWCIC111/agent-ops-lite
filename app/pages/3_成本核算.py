@@ -33,14 +33,14 @@ with c1:
                  color_discrete_sequence=px.colors.qualitative.Set2)
     fig.update_layout(height=340, margin=dict(t=10, b=10, l=10, r=10),
                       title="各 Agent 成本占比")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 with c2:
     daily = df.groupby("date")["cost"].sum().reset_index()
     fig2 = px.area(daily, x="date", y="cost",
                    color_discrete_sequence=["#D85A30"])
     fig2.update_layout(height=340, margin=dict(t=10, b=10, l=10, r=10),
                        title="每日成本趋势", xaxis_title="", yaxis_title="成本(¥)")
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width="stretch")
 
 # ---- 成本配额熔断模拟 ----
 st.subheader("成本配额熔断（模拟）")

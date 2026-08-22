@@ -43,7 +43,7 @@ with c1:
     )
     fig.update_layout(height=360, margin=dict(t=10, b=10, l=10, r=10), showlegend=False,
                       xaxis_title="", yaxis_title="调用次数")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 with c2:
     fig2 = px.bar(
         agg, x="tool", y="平均耗时ms", color="tool",
@@ -51,11 +51,11 @@ with c2:
     )
     fig2.update_layout(height=360, margin=dict(t=10, b=10, l=10, r=10), showlegend=False,
                        xaxis_title="", yaxis_title="平均耗时(ms)")
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width="stretch")
 
 st.subheader("工具明细")
 st.dataframe(
     agg[["tool", "调用次数", "成功率", "平均耗时s", "平均耗时ms"]],
-    use_container_width=True,
+    width="stretch",
     hide_index=True,
 )
