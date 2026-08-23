@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)]()
 
-> 🚀 **在线 Demo**：[agent-ops-lite.streamlit.app](https://agent-ops-lite-cvxtlfredwnfmjhx8qwfmq.streamlit.app/)
+> 🚀 **在线 Demo**：[agent-ops-lite.streamlit.app](https://agent-ops-lite.streamlit.app/)
 
 ---
 
