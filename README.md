@@ -42,6 +42,32 @@ streamlit run Home.py
 
 > Demo 使用 2000 条模拟数据（固定随机种子，可复现），**数据结构与真实采集完全一致**——接入真实数据源即可用于生产。
 
+### 核心库：3 行接入任意 Agent
+
+`agent_ops` 是零依赖的核心采集库，用装饰器包裹任意 Agent 函数，自动完成 **采集 → 聚合 → 成本核算**：
+
+```python
+from agent_ops import trace, record_step, report
+
+@trace(agent="检索 Agent")                      # ① 装饰器一挂
+def my_agent(question: str) -> str:
+    record_step("知识检索", model="qwen-plus",   # ② 记录每一步
+                tool="知识库检索", tokens_in=800, tokens_out=120)
+    return "答案"
+
+my_agent("什么是 AgentOps?")                    # ③ 正常调用，自动采集
+print(report())                                 # → 成功率 / 延迟 / token / 成本
+```
+
+- 函数抛异常 → Trace 自动标记 `failed` 并记录失败原因
+- 采集的 `Step` / `Trace` 字段与观测面板**完全一致**（测试验证过），面板可直接消费
+- 完整示例见 [`examples/quickstart.py`](examples/quickstart.py)
+
+```bash
+# 运行示例（含失败场景与聚合报告）
+python examples/quickstart.py
+```
+
 ### 联动演示（30 秒讲完的完整闭环）
 
 ```mermaid
@@ -122,15 +148,22 @@ agent-ops-lite/
 │     ├─ 5_版本对比.py
 │     ├─ 6_灰度发布.py
 │     └─ 7_Agent拓扑.py
-├─ examples/               # 一行代码接入示例（规划中）
-├─ agent_ops/              # 核心库：采集 / 聚合 / 成本 / 熔断（开发中）
+├─ examples/               # 接入示例（3 行接入，含失败场景）
+│  └─ quickstart.py
+├─ agent_ops/              # 核心库：采集 / 聚合 / 成本核算（零依赖）
+│  ├─ __init__.py          # 公共 API：trace / record_step / report
+│  ├─ tracer.py            # @trace 装饰器 + Collector 采集器
+│  ├─ metrics.py           # 指标聚合（与面板 KPI 口径一致）
+│  └─ cost.py              # 成本核算（模型单价与面板一致）
+├─ tests/                  # 核心库测试（18 项断言，含数据兼容性）
+│  └─ test_core.py
 └─ README.md
 ```
 
 ## Roadmap
 
 - [x] Live Demo：8 页面完整面板（模拟数据 · Live 实时模式）
-- [ ] `agent_ops` 核心库：装饰器采集真实 Trace
+- [x] `agent_ops` 核心库：装饰器采集真实 Trace（18 项测试通过，数据与面板打通）
 - [ ] 存储后端：SQLite / Elasticsearch 可选
 - [ ] 多框架适配：LangGraph / Dify / 自研 Agent
 - [ ] 告警通知：企业微信 / 飞书 Webhook
