@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 random.seed(42)
@@ -43,7 +43,7 @@ STEP_TEMPLATES = [
 
 @dataclass
 class Step:
-    """Agent 执行链中的一步"""
+    """Agent 执行链中的一步（可嵌套子步骤，形成父子 span 树）"""
     name: str
     model: str
     tool: str | None
@@ -52,6 +52,7 @@ class Step:
     latency_ms: int
     status: str          # success | error
     error: str | None = None
+    children: list["Step"] = field(default_factory=list)  # 子步骤（父子 span）
 
 
 @dataclass

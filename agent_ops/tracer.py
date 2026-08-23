@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import contextlib
 import functools
 import random
 import threading
@@ -29,7 +30,7 @@ from .cost import MODEL_PRICE
 
 @dataclass
 class Step:
-    """Agent 执行链中的一步"""
+    """Agent 执行链中的一步（可嵌套子步骤，形成父子 span 树）"""
     name: str
     model: str
     tool: str | None
@@ -38,6 +39,16 @@ class Step:
     latency_ms: int
     status: str          # success | error
     error: str | None = None
+    children: list["Step"] = field(default_factory=list)  # 子步骤（父子 span）
+
+    def total_tokens(self) -> int:
+        """含子步骤的 token 总数"""
+        own = self.tokens_in + self.tokens_out
+        return own + sum(c.total_tokens() for c in self.children)
+
+    def total_latency(self) -> int:
+        """含子步骤的耗时总数"""
+        return self.latency_ms + sum(c.total_latency() for c in self.children)
 
 
 @dataclass
@@ -53,13 +64,17 @@ class Trace:
     cost_usd: float = 0.0
 
     def summarize(self) -> None:
-        """聚合统计：总 token、总延迟、成本（按模型单价折算）"""
-        self.tokens = sum(s.tokens_in + s.tokens_out for s in self.steps)
-        self.latency_ms = sum(s.latency_ms for s in self.steps)
-        self.cost_usd = sum(
-            (s.tokens_in * MODEL_PRICE[s.model][0] + s.tokens_out * MODEL_PRICE[s.model][1]) / 1000
-            for s in self.steps
-        )
+        """聚合统计：总 token、总延迟、成本（按模型单价折算，递归含子步骤）"""
+        self.tokens = sum(s.total_tokens() for s in self.steps)
+        self.latency_ms = sum(s.total_latency() for s in self.steps)
+
+        def step_cost(s: Step) -> float:
+            return (
+                (s.tokens_in * MODEL_PRICE[s.model][0] + s.tokens_out * MODEL_PRICE[s.model][1]) / 1000
+                + sum(step_cost(c) for c in s.children)
+            )
+
+        self.cost_usd = sum(step_cost(s) for s in self.steps)
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +120,7 @@ class _TraceContext:
     trace: Trace
     start_mark: float
     last_mark: float
+    stack: list[Step] = field(default_factory=list)  # 父子 span 栈：栈顶 = 当前父步骤
 
 
 _current: ContextVar[_TraceContext | None] = ContextVar("agent_ops_current", default=None)
@@ -128,10 +144,11 @@ def record_step(
     status: str = "success",
     error: str | None = None,
     latency_ms: int | None = None,
-) -> None:
-    """在当前 @trace 装饰的函数内记录一步。
+) -> Step:
+    """在当前 @trace 装饰的函数内记录一步，返回该 Step。
 
-    latency_ms 缺省时按"上一步到这一步"的间隔自动计时。
+    - 在 span() 块内调用时，自动挂为当前父步骤的 children（父子 span）。
+    - latency_ms 缺省时按"上一步到这一步"的间隔自动计时。
     """
     ctx = _current.get()
     if ctx is None:
@@ -150,7 +167,53 @@ def record_step(
         status=status,
         error=error,
     )
-    ctx.trace.steps.append(step)
+    if ctx.stack:
+        ctx.stack[-1].children.append(step)
+    else:
+        ctx.trace.steps.append(step)
+    return step
+
+
+def span(
+    name: str,
+    model: str | None = None,
+    tool: str | None = None,
+    tokens_in: int = 0,
+    tokens_out: int = 0,
+    status: str = "success",
+    error: str | None = None,
+    latency_ms: int | None = None,
+):
+    """上下文管理器：创建一个父步骤，块内的 record_step 自动挂为其子步骤。
+
+    >>> with span("RAG 检索链路", model="qwen-plus"):
+    ...     record_step("向量检索", tool="Milvus", tokens_in=300, tokens_out=100)
+    ...     record_step("精排", tool="Rerank", tokens_in=200, tokens_out=80)
+
+    退出时返回父 Step（供读取 tokens / latency 等聚合值）。
+    容器自身 latency_ms 默认 0（不自动计时）——耗时由块内子步骤承载，避免双计；
+    如需标记容器本身的真实耗时（如 HTTP 往返），显式传入 latency_ms 即可。
+    """
+    if latency_ms is None:
+        latency_ms = 0  # 容器不自动计时，避免与子步骤耗时重复计算
+    parent = record_step(
+        name=name, model=model, tool=tool,
+        tokens_in=tokens_in, tokens_out=tokens_out,
+        status=status, error=error, latency_ms=latency_ms,
+    )
+
+    @contextlib.contextmanager
+    def _manager():
+        ctx = _current.get()
+        if ctx is None:
+            raise RuntimeError("span() 必须在 @trace 装饰的函数内调用")
+        ctx.stack.append(parent)
+        try:
+            yield parent
+        finally:
+            ctx.stack.pop()
+
+    return _manager()
 
 
 def trace(agent: str = "Agent", model: str | None = None, collector: Collector | None = None):

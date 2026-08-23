@@ -15,17 +15,18 @@
 采集的 Trace 数据结构与 app/demo_data.py 完全一致 —— 面板可直接消费。
 """
 from .cost import MODEL_PRICE, USD_TO_CNY, step_cost_cny, step_cost_usd
-from .metrics import report, traces_to_rows
+from .metrics import model_usage, report, traces_to_rows
 from .tracer import (
     Collector,
     Step,
     Trace,
     get_collector,
     record_step,
+    span,
     trace,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "Collector",
@@ -34,8 +35,10 @@ __all__ = [
     "MODEL_PRICE",
     "USD_TO_CNY",
     "get_collector",
+    "model_usage",
     "record_step",
     "report",
+    "span",
     "step_cost_cny",
     "step_cost_usd",
     "trace",

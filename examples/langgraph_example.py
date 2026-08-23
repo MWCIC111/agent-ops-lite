@@ -23,7 +23,7 @@ from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
 
-from agent_ops import record_step, report, trace
+from agent_ops import model_usage, record_step, report, span, trace
 
 
 # ---------------------------------------------------------------------------
@@ -45,20 +45,30 @@ class QAState(TypedDict):
 
 
 def retrieve_node(state: QAState) -> dict:
-    """检索节点：从知识库取依据（模拟）。"""
+    """检索节点：从知识库取依据（模拟）。用 span 演示父子 span 结构。"""
     time.sleep(random.uniform(0.2, 0.5))
     if "超时" in state["question"]:
         # 模拟工具调用超时 → 抛异常，@trace 自动把整条 Trace 标记为 failed
         raise RuntimeError("知识库检索超时（ToolTimeout）")
     context = f"【依据】关于「{state['question']}」的研发资料片段……"
-    record_step(
-        "知识库检索",
-        model="qwen-plus",
-        tool="知识库检索",
-        tokens_in=400,
-        tokens_out=120,
-        latency_ms=random.randint(200, 500),
-    )
+    # 父步骤：RAG 检索链路；块内两个 record_step 自动挂为它的子步骤（父子 span）
+    with span("RAG 检索链路", model="qwen-plus"):
+        record_step(
+            "向量检索",
+            model="qwen-plus",
+            tool="Milvus",
+            tokens_in=300,
+            tokens_out=100,
+            latency_ms=random.randint(150, 350),
+        )
+        record_step(
+            "精排",
+            model="qwen-plus",
+            tool="Rerank",
+            tokens_in=100,
+            tokens_out=20,
+            latency_ms=random.randint(50, 150),
+        )
     return {"context": context}
 
 
@@ -130,9 +140,20 @@ def run_agent(question: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _dump_steps(steps, indent: int = 0) -> None:
+    """递归打印步骤树（展示父子 span 结构）"""
+    for s in steps:
+        prefix = "  " * indent + ("└─ " if indent else "· ")
+        mark = "❌" if s.status == "error" else "✅"
+        print(f"{prefix}{mark} {s.name} | {s.model} | tok={s.tokens_in}+{s.tokens_out} | {s.latency_ms}ms"
+              + (f" | error={s.error}" if s.error else ""))
+        if s.children:
+            _dump_steps(s.children, indent + 1)
+
+
 def main() -> None:
     print("=" * 62)
-    print("agent_ops × LangGraph：真实框架接入示例")
+    print("agent_ops × LangGraph：真实框架接入示例（含父子 span）")
     print("=" * 62)
 
     # 正常调用 × 2
@@ -150,7 +171,20 @@ def main() -> None:
     print("\n" + "=" * 62)
     print(report())
     print("=" * 62)
-    print("\n💡 说明：3 次调用中 1 次失败，report() 自动统计成功率与失败原因。")
+
+    # 按模型归因（v0.2：父子 span 的 token 正确归因到实际模型）
+    print("\n按模型用量（model_usage）：")
+    for m, u in model_usage().items():
+        print(f"  {m}: {u['calls']} 次 | in={u['tokens_in']} out={u['tokens_out']} | ${u['cost_usd']:.4f}")
+
+    # 最近一条成功 Trace 的步骤树（展示父子 span）
+    from agent_ops import get_collector
+    last_ok = [t for t in get_collector().traces() if t.status == "success"][-1]
+    print(f"\n最近成功 Trace（{last_ok.trace_id}）步骤树：")
+    _dump_steps(last_ok.steps)
+
+    print("\n💡 说明：3 次调用中 1 次失败，report() 自动统计成功率与失败原因；")
+    print("   span() 让检索内部的两个工具调用形成父子层级，成本/延迟可逐层归因。")
     print("   生产环境把 report() 换成写 ES / 面板数据源，8 个观测页面即可直接消费。")
 
 

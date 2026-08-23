@@ -9,6 +9,7 @@ import statistics
 from datetime import datetime
 from typing import Any
 
+from .cost import MODEL_PRICE
 from .tracer import Collector, Trace, get_collector
 
 
@@ -30,6 +31,43 @@ def _agg_traces(traces: list[Trace]) -> dict[str, Any]:
     }
 
 
+def _walk_steps(trace: Trace):
+    """递归遍历一条 Trace 的所有步骤（含子步骤，用于模型归因）"""
+    for s in trace.steps:
+        yield s
+        yield from _walk_children(s)
+
+
+def _walk_children(step) -> list:
+    """递归展开步骤的子步骤"""
+    for c in step.children:
+        yield c
+        yield from _walk_children(c)
+
+
+def model_usage(collector: Collector | None = None) -> dict[str, dict[str, float | int]]:
+    """按模型归因的用量统计：调用次数 / token 入 / token 出 / 成本。
+
+    返回 {模型名: {calls, tokens_in, tokens_out, tokens, cost_usd}}，按成本降序。
+    递归含子步骤——父子 span 的 token 会正确归因到实际模型。
+    """
+    sink = collector or get_collector()
+    usage: dict[str, dict] = {}
+    for t in sink.traces():
+        for s in _walk_steps(t):
+            m = s.model
+            if m not in usage:
+                usage[m] = {"calls": 0, "tokens_in": 0, "tokens_out": 0, "tokens": 0, "cost_usd": 0.0}
+            usage[m]["calls"] += 1
+            usage[m]["tokens_in"] += s.tokens_in
+            usage[m]["tokens_out"] += s.tokens_out
+            usage[m]["tokens"] += s.tokens_in + s.tokens_out
+            usage[m]["cost_usd"] += (
+                s.tokens_in * MODEL_PRICE[s.model][0] + s.tokens_out * MODEL_PRICE[s.model][1]
+            ) / 1000
+    return dict(sorted(usage.items(), key=lambda kv: kv[1]["cost_usd"], reverse=True))
+
+
 def report(collector: Collector | None = None, since: datetime | None = None) -> dict[str, Any]:
     """生成聚合报告。
 
@@ -38,6 +76,7 @@ def report(collector: Collector | None = None, since: datetime | None = None) ->
         {
           "total": {...总体指标...},
           "by_agent": {agent名: {...该Agent指标...}},
+          "by_model": {模型名: {...模型用量...}},   # v0.2 新增
           "window": "..."   # 统计窗口描述
         }
     """
@@ -53,11 +92,24 @@ def report(collector: Collector | None = None, since: datetime | None = None) ->
         agent_traces = [t for t in traces if t.agent == agent]
         by_agent[agent] = _agg_traces(agent_traces)
 
+    by_model = model_usage(sink) if since is None else model_usage(_SinceCollector(sink, since))
+
     window = f"近 {len(traces)} 次调用"
     if since is not None:
         window = f"自 {since:%Y-%m-%d %H:%M} 起 {len(traces)} 次调用"
 
-    return {"total": total, "by_agent": by_agent, "window": window}
+    return {"total": total, "by_agent": by_agent, "by_model": by_model, "window": window}
+
+
+class _SinceCollector(Collector):
+    """按时间过滤的采集器视图（供 report(since=...) 内部分组用）"""
+
+    def __init__(self, source: Collector, since: datetime) -> None:
+        self._source = source
+        self._since = since
+
+    def traces(self) -> list[Trace]:
+        return [t for t in self._source.traces() if t.started_at >= self._since]
 
 
 def traces_to_rows(traces: list[Trace] | None = None, collector: Collector | None = None) -> list[dict]:

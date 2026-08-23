@@ -96,6 +96,22 @@ def retrieve_node(state):
 python examples/langgraph_example.py
 ```
 
+### 父子 span：一个工具内部还能再分层
+
+`span()` 是上下文管理器，创建"父步骤"，块内所有 `record_step` 自动挂为它的子步骤——适合把一次工具调用的内部拆成多段（如检索链路里的向量检索 + 精排）：
+
+```python
+from agent_ops import span
+
+with span("RAG 检索链路", model="qwen-plus"):   # 父步骤
+    record_step("向量检索", tool="Milvus", tokens_in=300, tokens_out=100)
+    record_step("精排",     tool="Rerank", tokens_in=100, tokens_out=20)
+```
+
+- 成本 / 延迟 / token 自动**递归聚合**到父步骤，`report()` 总账含子步骤
+- `report()["by_model"]` / `model_usage()` 把 token 与成本**归因到真实模型**（父子 span 不重复计费）
+- 容器自身不自动计时（避免与子步骤双计），需要时可显式传 `latency_ms`
+
 ### 联动演示（30 秒讲完的完整闭环）
 
 ```mermaid
@@ -184,7 +200,7 @@ agent-ops-lite/
 │  ├─ tracer.py            # @trace 装饰器 + Collector 采集器
 │  ├─ metrics.py           # 指标聚合（与面板 KPI 口径一致）
 │  └─ cost.py              # 成本核算（模型单价与面板一致）
-├─ tests/                  # 核心库测试（18 项断言，含数据兼容性）
+├─ tests/                  # 核心库测试（30 项断言，含数据兼容性）
 │  └─ test_core.py
 └─ README.md
 ```
@@ -192,8 +208,9 @@ agent-ops-lite/
 ## Roadmap
 
 - [x] Live Demo：8 页面完整面板（模拟数据 · Live 实时模式）
-- [x] `agent_ops` 核心库：装饰器采集真实 Trace（18 项测试通过，数据与面板打通）
+- [x] `agent_ops` 核心库：装饰器采集真实 Trace（30 项测试通过，数据与面板打通）
 - [x] 多框架适配：LangGraph 真实示例（3 节点图，失败自动标记）
+- [x] 父子 span：工具内部嵌套分层 + 按模型归因（`model_usage` / `by_model`）
 - [ ] 存储后端：SQLite / Elasticsearch 可选
 - [ ] 多框架适配：Dify / 自研 Agent
 - [ ] 告警通知：企业微信 / 飞书 Webhook
