@@ -68,6 +68,34 @@ print(report())                                 # → 成功率 / 延迟 / token
 python examples/quickstart.py
 ```
 
+### 核心库 × LangGraph：真实框架接入
+
+`agent_ops` 不绑定任何框架——用 LangGraph 的 `StateGraph` 搭一个 3 节点 Agent（检索 → 生成 → 校验），`@trace` 装饰器包住图的调用入口即可自动采集：
+
+```python
+from langgraph.graph import END, StateGraph
+from agent_ops import trace, record_step, report
+
+@trace(agent="研发问答 Agent")          # ① 包住 LangGraph 图调用入口
+def run_agent(question: str) -> str:
+    result = graph.invoke({"question": question})   # ② 正常跑你的图
+    return result["answer"]
+
+# ③ 节点函数 = 天然 step 边界，内部 record_step 记录
+def retrieve_node(state):
+    record_step("知识库检索", model="qwen-plus",
+                tool="知识库检索", tokens_in=400, tokens_out=120)
+    ...
+```
+
+- 节点抛异常 → 整条 Trace 自动标记 `failed` 并记录失败原因（可定位到具体节点）
+- 完整可运行示例见 [`examples/langgraph_example.py`](examples/langgraph_example.py)
+
+```bash
+# 运行 LangGraph 示例（需先安装：pip install langgraph）
+python examples/langgraph_example.py
+```
+
 ### 联动演示（30 秒讲完的完整闭环）
 
 ```mermaid
@@ -148,8 +176,9 @@ agent-ops-lite/
 │     ├─ 5_版本对比.py
 │     ├─ 6_灰度发布.py
 │     └─ 7_Agent拓扑.py
-├─ examples/               # 接入示例（3 行接入，含失败场景）
-│  └─ quickstart.py
+├─ examples/               # 接入示例（3 行接入 + LangGraph 真实框架）
+│  ├─ quickstart.py        # 3 行接入普通函数（含失败场景）
+│  └─ langgraph_example.py # LangGraph 3 节点图接入（检索→生成→校验）
 ├─ agent_ops/              # 核心库：采集 / 聚合 / 成本核算（零依赖）
 │  ├─ __init__.py          # 公共 API：trace / record_step / report
 │  ├─ tracer.py            # @trace 装饰器 + Collector 采集器
@@ -164,8 +193,9 @@ agent-ops-lite/
 
 - [x] Live Demo：8 页面完整面板（模拟数据 · Live 实时模式）
 - [x] `agent_ops` 核心库：装饰器采集真实 Trace（18 项测试通过，数据与面板打通）
+- [x] 多框架适配：LangGraph 真实示例（3 节点图，失败自动标记）
 - [ ] 存储后端：SQLite / Elasticsearch 可选
-- [ ] 多框架适配：LangGraph / Dify / 自研 Agent
+- [ ] 多框架适配：Dify / 自研 Agent
 - [ ] 告警通知：企业微信 / 飞书 Webhook
 - [ ] 单元测试与 CI
 
