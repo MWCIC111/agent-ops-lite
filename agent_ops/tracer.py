@@ -78,28 +78,41 @@ class Trace:
 
 
 # ---------------------------------------------------------------------------
-# Collector —— 内存采集器（生产可替换为 ES / ClickHouse / 对象存储）
+# Collector —— 采集器（内存 + 可选持久化存储）
 # ---------------------------------------------------------------------------
 
 
 class Collector:
-    """线程安全的 Trace 采集器。生产环境可将 add() 替换为写持久化存储。"""
+    """线程安全的 Trace 采集器。
 
-    def __init__(self) -> None:
-        self._traces: list[Trace] = []
+    可挂 storage（实现 TraceStore 协议，如 SQLiteStore / MemoryStore）：
+      - add() 时写入内存并同步落库
+      - traces() 在内存为空时自动从存储恢复（模拟"重启后历史仍在"）
+      - clear() 同时清空内存与存储
+    """
+
+    def __init__(self, storage=None) -> None:
+        self._traces: list = []
+        self._storage = storage
         self._lock = threading.Lock()
 
     def add(self, trace: Trace) -> None:
         with self._lock:
             self._traces.append(trace)
+        if self._storage is not None:
+            self._storage.save(trace)
 
     def traces(self) -> list[Trace]:
         with self._lock:
+            if not self._traces and self._storage is not None:
+                self._traces = self._storage.load()
             return list(self._traces)
 
     def clear(self) -> None:
         with self._lock:
             self._traces.clear()
+            if self._storage is not None:
+                self._storage.clear()
 
 
 _collector = Collector()

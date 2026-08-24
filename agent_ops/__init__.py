@@ -14,8 +14,10 @@
 
 采集的 Trace 数据结构与 app/demo_data.py 完全一致 —— 面板可直接消费。
 """
+from .alerts import AlertEvent, AlertRule, WebhookAlert, send_alert
 from .cost import MODEL_PRICE, USD_TO_CNY, step_cost_cny, step_cost_usd
 from .metrics import model_usage, report, traces_to_rows
+from .storage import MemoryStore, SQLiteStore, TraceStore, dict_to_trace, trace_to_dict
 from .tracer import (
     Collector,
     Step,
@@ -26,22 +28,31 @@ from .tracer import (
     trace,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
+    "AlertEvent",
+    "AlertRule",
     "Collector",
+    "MemoryStore",
+    "SQLiteStore",
     "Step",
     "Trace",
+    "TraceStore",
     "MODEL_PRICE",
     "USD_TO_CNY",
+    "WebhookAlert",
+    "dict_to_trace",
     "get_collector",
     "model_usage",
     "record_step",
     "report",
+    "send_alert",
     "span",
     "step_cost_cny",
     "step_cost_usd",
     "trace",
+    "trace_to_dict",
     "traces_to_rows",
     "__version__",
 ]
