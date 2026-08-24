@@ -4,7 +4,7 @@
 直接运行：
     python examples/quickstart.py
 
-面试叙事："接入任意 Agent 只需要 @trace 装饰器，函数正常写，
+"接入任意 Agent 只需要 @trace 装饰器，函数正常写，
 采集、聚合、成本核算全部自动完成——数据结构与观测面板完全一致。"
 """
 from __future__ import annotations
