@@ -30,7 +30,26 @@ agent-ops-lite 用最轻的方式解决这些问题：**接入一个装饰器，
 - **告警规则**：错误率阈值触发告警，慢调用 Top N 自动列出；**Webhook 告警**（企业微信 / 飞书机器人）超阈值自动推送
 - **持久化存储**：内置 SQLite 存储后端（零依赖），重启不丢、历史可查；存储接口可替换为 Elasticsearch / ClickHouse
 - **跨页联动**：拓扑异常 / 配额熔断 / 发布结论 / 灰度进度全局共享——任一页面操作，全系统同步感知（模拟真实生产"所有面板读同一后端"）
+- **Agent Skill**：内置 `agentops-observe` skill——SKILL.md（触发词 + 三步接入 + 参数规范）+ 配套闭环演示脚本，让任意 Agent 直接学会用本库
 - **零依赖核心**：纯 Python 标准库实现，不绑定 LangChain / 任何具体框架
+
+## Agent Skill：agentops-observe
+
+仓库内置一个可直接使用的 Agent Skill，用于**教任意 Agent 给自身加可观测性**：
+
+```
+skills/agentops-observe/
+├─ SKILL.md                        # 触发词 + 三步接入 + 核心 API 速查 + 典型用法
+└─ scripts/observe_agent.py        # 四步闭环演示：采集 → 聚合 → 告警 → 持久化
+```
+
+```bash
+python skills/agentops-observe/scripts/observe_agent.py
+```
+
+一键跑通完整闭环：`@trace` 采集（含父子 span + 失败标记）→ `report()` 聚合 → 告警阈值命中（本地 mock HTTP 验证 POST 格式）→ SQLite 落库 + 模拟重启恢复。
+
+**Skill 与核心库的分工**：SKILL.md 负责"教 Agent 怎么用"（触发条件 / 步骤 / 参数），`agent_ops` 负责"真正干活"（零依赖实现）。触发词准确、指令可执行、失败可降级——Agent 按需加载，不撑爆上下文。
 
 ## 快速开始
 
@@ -230,6 +249,10 @@ agent-ops-lite/
 ├─ examples/               # 接入示例（3 行接入 + LangGraph 真实框架）
 │  ├─ quickstart.py        # 3 行接入普通函数（含失败场景）
 │  └─ langgraph_example.py # LangGraph 3 节点图接入（检索→生成→校验）
+├─ skills/                 # Agent Skill：让 Agent 学会用本库（SKILL.md + 脚本）
+│  └─ agentops-observe/    # 给任意 Agent 加可观测性（触发词 / 三步接入 / 闭环演示）
+│     ├─ SKILL.md
+│     └─ scripts/observe_agent.py  # 四步闭环演示（采集→聚合→告警→持久化）
 ├─ agent_ops/              # 核心库：采集 / 聚合 / 成本 / 存储 / 告警（零依赖）
 │  ├─ __init__.py          # 公共 API：trace / record_step / report
 │  ├─ tracer.py            # @trace 装饰器 + Collector 采集器（支持挂存储）
@@ -237,7 +260,7 @@ agent-ops-lite/
 │  ├─ cost.py              # 成本核算（模型单价与面板一致）
 │  ├─ storage.py           # 持久化存储：SQLiteStore / MemoryStore（协议可换 ES）
 │  └─ alerts.py            # 告警：WebhookAlert（企业微信 / 飞书，阈值规则）
-├─ tests/                  # 核心库测试（53 项断言，含数据兼容性）
+├─ tests/                  # 核心库测试（54 项断言，含数据兼容性）
 │  └─ test_core.py
 └─ README.md
 ```
@@ -245,12 +268,13 @@ agent-ops-lite/
 ## Roadmap
 
 - [x] Live Demo：8 页面完整面板（模拟数据 · Live 实时模式）
-- [x] `agent_ops` 核心库：装饰器采集真实 Trace（53 项测试通过，数据与面板打通）
+- [x] `agent_ops` 核心库：装饰器采集真实 Trace（54 项测试通过，数据与面板打通）
 - [x] 多框架适配：LangGraph 真实示例（3 节点图，失败自动标记）
 - [x] 父子 span：工具内部嵌套分层 + 按模型归因（`model_usage` / `by_model`）
 - [x] 存储后端：SQLite 持久化（零依赖，接口可换 Elasticsearch）
 - [x] 告警通知：企业微信 / 飞书 Webhook（阈值规则自动推送）
 - [x] 单元测试与 CI（GitHub Actions 自动验证，双 Python 版本矩阵）
+- [x] Agent Skill：`agentops-observe`（SKILL.md + 触发词 + 闭环演示脚本）
 - [ ] 多框架适配：Dify / 自研 Agent
 
 ## License

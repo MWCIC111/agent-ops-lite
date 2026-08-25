@@ -97,6 +97,8 @@ def main() -> None:
     r = report()
     check("total.calls 正确", r["total"]["calls"] == 1, f"got {r['total']['calls']}")
     check("成功率 0%（唯一调用失败）", r["total"]["success_rate"] == 0.0, f"got {r['total']['success_rate']}")
+    check("error_rate 与 success_rate 互补（告警契约）", r["total"]["error_rate"] == 1.0,
+          f"got {r['total']['error_rate']}")
     check("by_agent 有分组", "失败 Agent" in r["by_agent"])
 
     # ---------- 5. traces_to_rows 与面板字段一致 ----------

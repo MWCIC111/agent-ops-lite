@@ -18,13 +18,15 @@ def _agg_traces(traces: list[Trace]) -> dict[str, Any]:
     n = len(traces)
     if n == 0:
         return {
-            "calls": 0, "success_rate": 0.0, "avg_latency_ms": 0.0,
+            "calls": 0, "success_rate": 0.0, "error_rate": 0.0, "avg_latency_ms": 0.0,
             "total_tokens": 0, "total_cost_usd": 0.0,
         }
     ok = sum(1 for t in traces if t.status == "success")
+    success_rate = ok / n
     return {
         "calls": n,
-        "success_rate": ok / n,
+        "success_rate": success_rate,
+        "error_rate": 1 - success_rate,
         "avg_latency_ms": statistics.mean(t.latency_ms for t in traces),
         "total_tokens": sum(t.tokens for t in traces),
         "total_cost_usd": sum(t.cost_usd for t in traces),
