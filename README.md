@@ -291,10 +291,12 @@ agent-ops-lite/
 │     ├─ 5_版本对比.py
 │     ├─ 6_灰度发布.py
 │     └─ 7_Agent拓扑.py
-├─ examples/               # 接入示例（3 行接入 + LangGraph 真实框架 + MCP client）
+├─ examples/               # 接入示例（3 行接入 + LangGraph + MCP client）
 │  ├─ quickstart.py        # 3 行接入普通函数（含失败场景）
-│  ├─ langgraph_example.py # LangGraph 3 节点图接入（检索→生成→校验）
-│  └─ mcp_client_demo.py   # 最小 MCP client（纯标准库，连 mcp_server 跑通握手+全工具）
+│  ├─ langgraph_example.py # LangGraph 3 节点线性图接入（检索→生成→校验）
+│  ├─ multi_agent_example.py # LangGraph 多 Agent 协作（Orchestrator + 4 垂直 Agent + 条件路由）
+│  ├─ mcp_client_demo.py   # 最小 MCP client（纯标准库，连 mcp_server 跑通握手+全工具）
+│  └─ requirements.txt     # examples 依赖（langgraph），核心库不受影响
 ├─ skills/                 # Agent Skill：让 Agent 学会用本库（SKILL.md + 脚本）
 │  └─ agentops-observe/    # 给任意 Agent 加可观测性（触发词 / 三步接入 / 闭环演示）
 │     ├─ SKILL.md
