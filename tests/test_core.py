@@ -35,6 +35,13 @@ from agent_ops import (
     trace,
     traces_to_rows,
 )
+from agent_ops.mcp_server import (
+    MCPAgentOpsServer,
+    PROTOCOL_VERSION,
+    SERVER_NAME,
+    SERVER_VERSION,
+    seed_demo_data,
+)
 
 PASS = 0
 FAIL = 0
@@ -277,6 +284,121 @@ def main() -> None:
 
     import shutil
     shutil.rmtree(tmpdir, ignore_errors=True)
+
+    # ---------- 11. MCP Server（JSON-RPC 2.0 over stdio，零依赖手写） ----------
+    print("== MCP Server ==")
+    import json as _json
+    import subprocess as _sp
+    import tempfile as _tf
+    import os as _os2
+
+    # 11.1 真实子进程握手：--demo 启动 → initialize → tools/list → tools/call
+    mcp_tmpdir = _tf.mkdtemp(prefix="agentops_mcp_")
+    mcp_db = _os2.path.join(mcp_tmpdir, "mcp_ops.db")
+    repo_root = _os2.path.dirname(_os2.path.dirname(_os2.path.abspath(__file__)))
+    env = {**_os2.environ, "PYTHONPATH": repo_root}
+
+    proc = _sp.Popen(
+        [sys.executable, "-m", "agent_ops.mcp_server", "--demo", "--db", mcp_db],
+        stdin=_sp.PIPE, stdout=_sp.PIPE, stderr=_sp.PIPE,
+        text=True, cwd=repo_root, env=env,
+    )
+
+    def _send(obj):
+        line = _json.dumps(obj) + "\n"
+        proc.stdin.write(line)
+        proc.stdin.flush()
+        return _json.loads(proc.stdout.readline())
+
+    try:
+        r = _send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                   "params": {"protocolVersion": PROTOCOL_VERSION, "capabilities": {},
+                              "clientInfo": {"name": "test", "version": "1"}}})
+        check("initialize 返回 protocolVersion", r["result"]["protocolVersion"] == PROTOCOL_VERSION)
+        check("initialize serverInfo 名称", r["result"]["serverInfo"]["name"] == SERVER_NAME)
+        check("initialize serverInfo 版本", r["result"]["serverInfo"]["version"] == SERVER_VERSION)
+        check("initialize 暴露 tools 能力", "tools" in r["result"]["capabilities"])
+
+        # notifications/initialized 不返回响应（无 id）
+        proc.stdin.write(_json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+        proc.stdin.flush()
+
+        r = _send({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+        tool_names = [t["name"] for t in r["result"]["tools"]]
+        check("tools/list 返回 5 个工具", len(tool_names) == 5, f"got {tool_names}")
+        check("tools/list 含 report", "report" in tool_names)
+        check("tools/list 含 history", "history" in tool_names)
+        check("tools/list 含 check_alerts", "check_alerts" in tool_names)
+        check("每个工具带 inputSchema",
+              all("inputSchema" in t for t in r["result"]["tools"]))
+
+        # 11.2 tools/call report 返回真实聚合数据
+        r = _send({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                   "params": {"name": "report", "arguments": {}}})
+        text = _json.loads(r["result"]["content"][0]["text"])
+        check("report 工具返回 calls>0", text["total"]["calls"] > 0, f"got {text['total']['calls']}")
+        check("report 工具返回 by_agent", len(text["by_agent"]) >= 2)
+        check("report 工具返回 window", "window" in text)
+
+        # 11.3 tools/call model_usage 返回模型归因
+        r = _send({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+                   "params": {"name": "model_usage", "arguments": {}}})
+        usage = _json.loads(r["result"]["content"][0]["text"])
+        check("model_usage 工具按模型归因", len(usage) >= 2, f"got {list(usage)}")
+
+        # 11.4 tools/call traces limit 截断生效
+        r = _send({"jsonrpc": "2.0", "id": 5, "method": "tools/call",
+                   "params": {"name": "traces", "arguments": {"limit": 2}}})
+        rows = _json.loads(r["result"]["content"][0]["text"])
+        check("traces 工具 limit 截断", len(rows) == 2, f"got {len(rows)}")
+        check("traces 工具字段含 trace_id", "trace_id" in rows[0])
+
+        # 11.5 tools/call history 从 SQLite 读
+        r = _send({"jsonrpc": "2.0", "id": 6, "method": "tools/call",
+                   "params": {"name": "history", "arguments": {"db_path": mcp_db, "limit": 1}}})
+        hist = _json.loads(r["result"]["content"][0]["text"])
+        check("history 工具读 SQLite", len(hist) >= 1, f"got {len(hist)}")
+        check("history 工具返回嵌套 steps", "steps" in hist[0])
+
+        # 11.6 tools/call check_alerts 触发错误率告警
+        r = _send({"jsonrpc": "2.0", "id": 7, "method": "tools/call",
+                   "params": {"name": "check_alerts", "arguments": {}}})
+        alerts = _json.loads(r["result"]["content"][0]["text"])
+        check("check_alerts 触发 error_rate", alerts["triggered"] and
+              any(e["metric"] == "error_rate" for e in alerts["events"]))
+
+        # 11.7 未知工具 → isError=True
+        r = _send({"jsonrpc": "2.0", "id": 8, "method": "tools/call",
+                   "params": {"name": "bogus", "arguments": {}}})
+        check("未知工具返回 isError=True", r["result"].get("isError") is True)
+
+        # 11.8 未知 method → JSON-RPC -32601
+        r = _send({"jsonrpc": "2.0", "id": 9, "method": "nonexistent/method"})
+        check("未知 method 返回 -32601", r["error"]["code"] == -32601)
+
+        # 11.9 进程内协议处理：parse error → -32700
+        server = MCPAgentOpsServer(collector=get_collector())
+        resp = _json.loads(server.handle_message("{not json"))
+        check("parse error 返回 -32700", resp["error"]["code"] == -32700)
+
+        # 11.10 进程内 history 工具与子进程一致
+        seed_demo_data(n=2, db_path=mcp_db)
+        r2 = server.handle_message(_json.dumps(
+            {"jsonrpc": "2.0", "id": 10, "method": "tools/call",
+             "params": {"name": "history", "arguments": {"db_path": mcp_db}}}))
+        h2 = _json.loads(_json.loads(r2)["result"]["content"][0]["text"])
+        check("进程内 history 工具", len(h2) >= 1)
+
+        # 11.11 工具 result.content 结构符合 MCP 规范
+        r3 = server.handle_message(_json.dumps(
+            {"jsonrpc": "2.0", "id": 11, "method": "tools/call",
+             "params": {"name": "model_usage", "arguments": {}}}))
+        c = _json.loads(r3)["result"]["content"]
+        check("content 是 list 且首项 type=text", isinstance(c, list) and c[0]["type"] == "text")
+    finally:
+        proc.terminate()
+        proc.wait(timeout=5)
+        shutil.rmtree(mcp_tmpdir, ignore_errors=True)
 
     # ---------- 6. 与 demo_data 数据结构兼容 ----------
     print("== 与 app/demo_data.py 兼容 ==")

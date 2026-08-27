@@ -31,7 +31,8 @@ agent-ops-lite 用最轻的方式解决这些问题：**接入一个装饰器，
 - **持久化存储**：内置 SQLite 存储后端（零依赖），重启不丢、历史可查；存储接口可替换为 Elasticsearch / ClickHouse
 - **跨页联动**：拓扑异常 / 配额熔断 / 发布结论 / 灰度进度全局共享——任一页面操作，全系统同步感知（模拟真实生产"所有面板读同一后端"）
 - **Agent Skill**：内置 `agentops-observe` skill——SKILL.md（触发词 + 三步接入 + 参数规范）+ 配套闭环演示脚本，让任意 Agent 直接学会用本库
-- **零依赖核心**：纯 Python 标准库实现，不绑定 LangChain / 任何具体框架
+- **MCP Server**：内置 `agent_ops.mcp_server`——零依赖手写实现 MCP stdio 协议（JSON-RPC 2.0），暴露 5 个工具（report / model_usage / traces / history / check_alerts），Claude Desktop / Cursor 可直接连接查询观测数据
+- **零依赖核心**：纯 Python 标准库实现，不绑定 LangChain / 任何具体框架（MCP 协议层也只用标准库，不依赖任何 MCP SDK）
 
 ## Agent Skill：agentops-observe
 
@@ -50,6 +51,50 @@ python skills/agentops-observe/scripts/observe_agent.py
 一键跑通完整闭环：`@trace` 采集（含父子 span + 失败标记）→ `report()` 聚合 → 告警阈值命中（本地 mock HTTP 验证 POST 格式）→ SQLite 落库 + 模拟重启恢复。
 
 **Skill 与核心库的分工**：SKILL.md 负责"教 Agent 怎么用"（触发条件 / 步骤 / 参数），`agent_ops` 负责"真正干活"（零依赖实现）。触发词准确、指令可执行、失败可降级——Agent 按需加载，不撑爆上下文。
+
+## MCP Server：agent-ops-lite as MCP
+
+仓库还内置一个 **MCP（Model Context Protocol）Server**——把 agent-ops-lite 的能力暴露给 AI 客户端，Claude Desktop / Cursor / 任意 MCP client 可以直接连接、查询观测数据。**与 Skill 形成双线**：Skill 教 Agent 给自己加观测，MCP 让外部 AI 直接读观测数据。
+
+**核心卖点**：MCP 协议层也是**零依赖纯标准库手写**——JSON-RPC 2.0 over stdio，不依赖任何第三方 MCP SDK。"懂协议、不靠框架"。
+
+### 暴露的工具
+
+| 工具 | 作用 |
+|---|---|
+| `report` | 生成聚合报告（总调用 / 成功率 / 错误率 / 成本 / 按 Agent 按模型分组） |
+| `model_usage` | 按模型归因用量统计（成本降序，含父子 span 归因） |
+| `traces` | 列出最近 Trace（展平成行，与面板表格字段一致） |
+| `history` | 查询 SQLite 持久化的历史 Trace（含嵌套步骤树） |
+| `check_alerts` | 检查告警规则是否触发（错误率 / 成本超阈值，只检查不发送） |
+
+### 本地试跑（stdio 模式）
+
+```bash
+# 启动 MCP server（--demo 启动时填充演示数据，方便连接即可见）
+python -m agent_ops.mcp_server --demo
+
+# 或自定义 SQLite 路径
+python -m agent_ops.mcp_server --demo --db /path/to/agent_ops.db
+```
+
+### 接入 Claude Desktop
+
+在 `~/Library/Application Support/Claude/claude_desktop_config.json`（macOS）或对应配置文件添加：
+
+```json
+{
+  "mcpServers": {
+    "agent-ops-lite": {
+      "command": "python",
+      "args": ["-m", "agent_ops.mcp_server", "--demo"],
+      "cwd": "/path/to/agent-ops-lite"
+    }
+  }
+}
+```
+
+重启 Claude Desktop，对话里就能直接说"查一下 agent-ops 的报告 / 最近有哪些失败的 trace / 错误率超过 10% 吗"——Claude 自动调用对应工具。
 
 ## 快速开始
 
@@ -259,8 +304,9 @@ agent-ops-lite/
 │  ├─ metrics.py           # 指标聚合（与面板 KPI 口径一致）
 │  ├─ cost.py              # 成本核算（模型单价与面板一致）
 │  ├─ storage.py           # 持久化存储：SQLiteStore / MemoryStore（协议可换 ES）
-│  └─ alerts.py            # 告警：WebhookAlert（企业微信 / 飞书，阈值规则）
-├─ tests/                  # 核心库测试（54 项断言，含数据兼容性）
+│  ├─ alerts.py            # 告警：WebhookAlert（企业微信 / 飞书，阈值规则）
+│  └─ mcp_server.py        # MCP Server：零依赖手写 stdio 协议，5 个工具供 AI 客户端连接
+├─ tests/                  # 核心库测试（77 项断言，含 MCP 协议 + 数据兼容性）
 │  └─ test_core.py
 └─ README.md
 ```
@@ -268,13 +314,14 @@ agent-ops-lite/
 ## Roadmap
 
 - [x] Live Demo：8 页面完整面板（模拟数据 · Live 实时模式）
-- [x] `agent_ops` 核心库：装饰器采集真实 Trace（54 项测试通过，数据与面板打通）
+- [x] `agent_ops` 核心库：装饰器采集真实 Trace（77 项测试通过，数据与面板打通）
 - [x] 多框架适配：LangGraph 真实示例（3 节点图，失败自动标记）
 - [x] 父子 span：工具内部嵌套分层 + 按模型归因（`model_usage` / `by_model`）
 - [x] 存储后端：SQLite 持久化（零依赖，接口可换 Elasticsearch）
 - [x] 告警通知：企业微信 / 飞书 Webhook（阈值规则自动推送）
 - [x] 单元测试与 CI（GitHub Actions 自动验证，双 Python 版本矩阵）
 - [x] Agent Skill：`agentops-observe`（SKILL.md + 触发词 + 闭环演示脚本）
+- [x] MCP Server：`agent_ops.mcp_server`（零依赖手写 stdio 协议，Claude Desktop / Cursor 可直连）
 - [ ] 多框架适配：Dify / 自研 Agent
 
 ## License
