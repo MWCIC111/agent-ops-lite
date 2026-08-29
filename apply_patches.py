@@ -7,7 +7,7 @@
 本脚本做仓库内改动，幂等（重复运行安全）：
   1. agent_ops/cost.py  —— 历史兜底（注：未知模型 KeyError 的根因已在 tracer.summarize /
                           metrics.model_usage 内置 .get(model,(0,0)) 兜底，此步现已冗余但保留无害）
-  2. app/demo_data.py   —— load_demo_traces() 追加真实落库 Trace（全面板可消费）
+  2. app/demo_data.py   —— 已并入源码（load_real_traces + load_demo_traces 合并真实 Trace），此步会 skip
   3. app/requirements.txt —— 确保含 openai（已并入源码，此步会 skip）
 
 注意：8_真实Agent.py 已随仓库提交，无需单独拷贝；未知模型兜底已移至核心库内置。
@@ -43,6 +43,11 @@ def patch_demo_data_py() -> None:
     p = os.path.join(ROOT, "app", "demo_data.py")
     with open(p, "r", encoding="utf-8") as f:
         s = f.read()
+
+    # 已并入源码（随仓库提交），新仓库直接 skip；保留下方逻辑兼容旧仓库。
+    if "def load_real_traces" in s:
+        print("[skip] app/demo_data.py 已并入真实 Trace 逻辑（随仓库提交），无需补丁")
+        return
 
     # 1) 顶部加 os / sys.path
     if "_REPO_ROOT" not in s:

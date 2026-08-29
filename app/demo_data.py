@@ -1,16 +1,27 @@
 """demo_data.py — 生成模拟 Agent 调用 Trace 数据
 
 设计要点（面试时可直接讲）：
-1. 数据结构与生产环境真实采集的 Trace 完全一致
+1. 数据结构复用 agent_ops 核心库（单一事实来源），与真实采集的 Trace 完全一致
    → Demo 不是"画假面板"，而是核心库的真实演示；换真实数据源页面零改动
 2. 固定随机种子 (seed=42)，每次运行数据可复现，方便截图/录屏
 3. 包含失败与重试场景，方便演示告警与异常页
+4. 末尾合并真实落库 Trace（来自真实 LLM API 调用），让模拟/真实在数据层面统一
 """
 from __future__ import annotations
 
+import os
 import random
-from dataclasses import dataclass, field
+import sys
 from datetime import datetime, timedelta
+
+# 让本模块能 import 到仓库根的 agent_ops（Streamlit 多页面下 app/ 非仓库根）
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+# 复用核心库的数据结构与单价表（单一事实来源，消除与 app/pages 的双定义漂移）
+from agent_ops import MODEL_PRICE, Step, Trace  # noqa: E402
+from agent_ops.storage import SQLiteStore  # noqa: E402
 
 random.seed(42)
 
@@ -18,13 +29,6 @@ random.seed(42)
 
 # 4 个垂直 Agent（与 7_Agent拓扑.py 的节点命名完全一致，保证跨页联动自洽）
 AGENTS = ["规划 Agent", "检索 Agent", "推理 Agent", "校验 Agent"]
-
-# 每 1K token 价格（美元）：(input, output)
-MODEL_PRICE = {
-    "gpt-4o": (0.0025, 0.0100),
-    "qwen-max": (0.0015, 0.0060),
-    "qwen-plus": (0.0004, 0.0012),
-}
 
 TOOLS = ["网页搜索", "数据库查询", "接口调用", "代码执行", "知识库检索"]
 
@@ -38,43 +42,6 @@ STEP_TEMPLATES = [
     ("代码执行", "gpt-4o", "代码执行"),
     ("内容生成", "qwen-max", None),
 ]
-
-# ---------------- 数据结构 ----------------
-
-@dataclass
-class Step:
-    """Agent 执行链中的一步（可嵌套子步骤，形成父子 span 树）"""
-    name: str
-    model: str
-    tool: str | None
-    tokens_in: int
-    tokens_out: int
-    latency_ms: int
-    status: str          # success | error
-    error: str | None = None
-    children: list["Step"] = field(default_factory=list)  # 子步骤（父子 span）
-
-
-@dataclass
-class Trace:
-    """一次完整的 Agent 调用链路"""
-    trace_id: str
-    agent: str
-    started_at: datetime
-    steps: list[Step]
-    status: str          # success | failed
-    tokens: int = 0
-    latency_ms: int = 0
-    cost_usd: float = 0.0
-
-    def summarize(self) -> None:
-        """聚合统计：总 token、总延迟、成本（按模型单价折算）"""
-        self.tokens = sum(s.tokens_in + s.tokens_out for s in self.steps)
-        self.latency_ms = sum(s.latency_ms for s in self.steps)
-        self.cost_usd = sum(
-            (s.tokens_in * MODEL_PRICE[s.model][0] + s.tokens_out * MODEL_PRICE[s.model][1]) / 1000
-            for s in self.steps
-        )
 
 
 # ---------------- 生成器 ----------------
@@ -106,12 +73,21 @@ def _gen_trace(at: datetime) -> Trace:
             steps.append(_gen_step(template, False))
     status = "failed" if failed and random.random() < 0.5 else "success"
     trace = Trace(trace_id, agent, at, steps, status)
-    trace.summarize()
+    trace.summarize()  # 聚合统计（复用核心库逻辑，未知模型按 0 价，安全）
     return trace
 
 
+def load_real_traces() -> list[Trace]:
+    """读取真实落库的 Trace（来自真实 LLM API 调用），供全面板消费。"""
+    try:
+        real_store = SQLiteStore(os.path.join(_REPO_ROOT, "agent_ops.db"))
+        return real_store.load()
+    except Exception:
+        return []
+
+
 def load_demo_traces(days: int = 14, n: int = 2000) -> list[Trace]:
-    """生成最近 n 天的模拟 Trace（按时间倒序）"""
+    """生成最近 n 天的模拟 Trace（按时间倒序），并合并真实落库 Trace。"""
     now = datetime.now()
     traces = []
     for _ in range(n):
@@ -121,12 +97,18 @@ def load_demo_traces(days: int = 14, n: int = 2000) -> list[Trace]:
         )
         traces.append(_gen_trace(at))
     traces.sort(key=lambda t: t.started_at, reverse=True)
+    # 追加真实落库的 Trace（来自真实 LLM API 调用），不改动模拟基线
+    try:
+        traces.extend(load_real_traces())
+        traces.sort(key=lambda t: t.started_at, reverse=True)
+    except Exception:
+        pass
     return traces
 
 
 if __name__ == "__main__":
     ts = load_demo_traces()
-    print(f"生成 {len(ts)} 条 Trace")
+    print(f"生成 {len(ts)} 条 Trace（含真实落库）")
     print(f"首条: {ts[0].trace_id} | {ts[0].agent} | {ts[0].status} | "
           f"{ts[0].tokens} tokens | {ts[0].latency_ms}ms | ${ts[0].cost_usd:.4f}")
     print(f"成功率: {sum(1 for t in ts if t.status == 'success') / len(ts):.1%}")

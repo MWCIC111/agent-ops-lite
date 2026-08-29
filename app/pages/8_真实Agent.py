@@ -7,8 +7,8 @@
 前置（详见接入指南）：
   1. 环境变量 DEEPSEEK_API_KEY 已配置（systemd 通过 EnvironmentFile 加载）
   2. app/requirements.txt 已加 openai
-  3. agent_ops/cost.py 已把未知模型兜底为 0 价（演示阶段避免 KeyError）
-  4. app/demo_data.py 的 load_demo_traces() 已追加真实 SQLite trace（见指南 / apply_patches.py）
+  3. 未知模型兜底已在 agent_ops 核心库内置（避免 KeyError）
+  4. app/demo_data.py 的 load_demo_traces() 已合并真实 SQLite trace（随仓库提交，无需补丁）
 
 安全注意：API Key 只从环境变量读取，不要写进代码或提交到 GitHub。
 """
@@ -154,7 +154,9 @@ if st.button("运行真实 Agent", type="primary"):
 # ------------------- 最近真实 Trace -------------------
 st.divider()
 st.subheader("最近真实 Trace（来自 agent_ops.db）")
-traces = collector.traces()
+# 统一数据源：直接读 SQLite 落库（与全面板 load_demo_traces 同源），
+# 重启后历史真实 Trace 仍在，不依赖进程内存。
+traces = SQLiteStore(DB_PATH).load()
 if not traces:
     st.caption("暂无真实调用记录，运行上方按钮后将出现在此处。")
 else:
