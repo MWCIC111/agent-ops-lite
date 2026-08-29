@@ -2,3 +2,5 @@ streamlit>=1.36
 plotly>=5.20
 pandas>=2.0
 openai
+jieba>=0.42
+rank_bm25>=0.2.2

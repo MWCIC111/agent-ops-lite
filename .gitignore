@@ -23,3 +23,6 @@ Thumbs.db
 # 运行时生成的真实 trace 数据库（含真实调用记录，不应入库）
 agent_ops.db
 *.db
+
+# RAG 离线索引缓存（运行时从 docs.jsonl 重建，无需入库）
+rag_data/*.pkl
