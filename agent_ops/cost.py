@@ -11,6 +11,8 @@ MODEL_PRICE: dict[str, tuple[float, float]] = {
     "gpt-4o": (0.0025, 0.0100),
     "qwen-max": (0.0015, 0.0060),
     "qwen-plus": (0.0004, 0.0012),
+    # DeepSeek 官方价（约 ¥1/百万 token 输入，¥2/百万 token 输出，按汇率 7.2 折算美元/1K）
+    "deepseek-chat": (0.00014, 0.00028),
 }
 
 # 美元 → 人民币参考汇率（仅用于展示，可在接入生产时替换为实时汇率）
