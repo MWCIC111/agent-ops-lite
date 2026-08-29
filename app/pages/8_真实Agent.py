@@ -106,7 +106,7 @@ def run_real_agent(scenario: str, question: str, model: str) -> str:
             {"role": "system", "content": "你是企业知识库助手，仅基于检索依据作答。"},
             {"role": "user", "content": f"依据：{ctx}\n问题：{question}"},
         ]
-        answer, tin, tout, ms = _timed(lambda: _deepseek_chat(model, messages))
+        (answer, tin, tout), ms = _timed(lambda: _deepseek_chat(model, messages))
         record_step("内容生成", model=model, tokens_in=tin, tokens_out=tout, latency_ms=ms)
         return answer
 
