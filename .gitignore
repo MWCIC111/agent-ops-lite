@@ -8,6 +8,10 @@ venv/
 # Streamlit
 .streamlit/secrets.toml
 
+# Secrets
+.env
+*.env
+
 # IDE
 .vscode/
 .idea/
