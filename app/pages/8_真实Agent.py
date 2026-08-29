@@ -25,7 +25,7 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__f
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from agent_ops import record_step, trace, SQLiteStore  # noqa: E402
+from agent_ops import Collector, record_step, trace, SQLiteStore  # noqa: E402
 from agent_ops.cost import MODEL_PRICE  # noqa: E402
 
 # 兜底：演示阶段把 deepseek 模型按 0 价计，避免价格波动影响展示。
@@ -35,6 +35,7 @@ for _m in ("deepseek-chat", "deepseek-reasoner", "deepseek-coder"):
 
 DB_PATH = os.path.join(_REPO_ROOT, "agent_ops.db")
 store = SQLiteStore(DB_PATH)
+collector = Collector(storage=store)
 
 # DeepSeek OpenAI 兼容端点（官方）
 OPENAI_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
@@ -82,7 +83,7 @@ def _mock_retrieve(question: str) -> str:
     return f"（检索依据）与「{question}」相关的内部知识库片段……"
 
 
-@trace(agent="真实 Agent · DeepSeek", collector=store)
+@trace(agent="真实 Agent · DeepSeek", collector=collector)
 def run_real_agent(scenario: str, question: str, model: str) -> str:
     """真实 Agent 入口，被 @trace 采集；每一步记录真实 token 与耗时。"""
     MODEL_PRICE.setdefault(model, (0.0, 0.0))  # 极端兜底：用户改了模型名也不崩
@@ -150,7 +151,7 @@ if st.button("运行真实 Agent", type="primary"):
 # ------------------- 最近真实 Trace -------------------
 st.divider()
 st.subheader("最近真实 Trace（来自 agent_ops.db）")
-traces = store.load()
+traces = collector.traces()
 if not traces:
     st.caption("暂无真实调用记录，运行上方按钮后将出现在此处。")
 else:
