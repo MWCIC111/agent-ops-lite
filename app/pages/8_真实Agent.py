@@ -57,6 +57,9 @@ def _timed(fn):
     t0 = time.perf_counter()
     result = fn()
     ms = max(int((time.perf_counter() - t0) * 1000), 1)
+    # 如果 fn 返回 tuple，自动展开后追加耗时，避免外层嵌套解包。
+    if isinstance(result, tuple):
+        return *result, ms
     return result, ms
 
 
