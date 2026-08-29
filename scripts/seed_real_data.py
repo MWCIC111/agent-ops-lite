@@ -33,6 +33,26 @@ for _p in (_REPO_ROOT, _APP_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+
+def _load_dotenv() -> None:
+    """从项目根 .env 注入环境变量（不依赖 python-dotenv）。"""
+    dotenv = os.path.join(_REPO_ROOT, ".env")
+    if not os.path.exists(dotenv):
+        return
+    with open(dotenv, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and os.environ.get(key) is None:
+                os.environ[key] = value
+
+
+_load_dotenv()
+
 import agent_runner  # noqa: E402
 
 # ---------------------------------------------------------------------------
