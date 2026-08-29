@@ -42,7 +42,7 @@ if traces:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("真实 Trace 数", f"{n:,}")
     c2.metric("成功率", f"{succ / n:.1%}")
-    c3.metric("累计成本", f"¥{total_cost:.2f}")
+    c3.metric("累计成本", f"¥{total_cost:.4f}")
     c4.metric("最近调用", last.strftime("%m-%d %H:%M"))
     st.subheader("各 Agent 调用分布")
     rows = [
@@ -69,9 +69,9 @@ with col1:
     general_n = st.number_input("通用问答条数", min_value=0, max_value=200, value=15)
     fail_n = st.number_input("注入真实失败条数", min_value=0, max_value=20, value=3)
 with col2:
-    cmd = (f"python3 scripts/seed_real_data.py --rag {rag_n} --butler {butler_n} "
-           f"--general {general_n} --failures {fail_n} --spread-days 14")
-    st.code(f"cd /home/ubuntu/agent-ops-lite && nohup {cmd} > seed.log 2>&1 &",
+    cmd = (f"./venv/bin/python scripts/seed_real_data.py --rag {rag_n} "
+           f"--butler {butler_n} --general {general_n} --failures {fail_n} --spread-days 14")
+    st.code(f"cd /home/ubuntu/agent-ops-lite && set -a && source .env && set +a && nohup {cmd} > seed.log 2>&1 &",
             language="bash")
     st.caption("复制上面的命令到 OrcaTerm 执行；或点右侧按钮在服务器后台直接启动。")
 

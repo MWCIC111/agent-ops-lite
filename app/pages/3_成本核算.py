@@ -67,11 +67,11 @@ today_cost = df[df["date"] == today]["cost"].sum()
 sim_get()["quota"] = quota
 if today_cost > quota:
     sim_get()["quota_breach"] = True
-    st.error(f"⚠️ 今日成本 ¥{today_cost:.1f} 已超出配额 ¥{quota} —— "
+    st.error(f"⚠️ 今日成本 ¥{today_cost:.4f} 已超出配额 ¥{quota} —— "
              f"模拟触发熔断：拒绝新的 Agent 调用，仅保留高优先级任务。")
 else:
     sim_get()["quota_breach"] = False
-    st.success(f"今日成本 ¥{today_cost:.1f}，低于配额 ¥{quota}，运行正常。"
-               f"（剩余额度 ¥{quota - today_cost:.1f}）")
+    st.success(f"今日成本 ¥{today_cost:.4f}，低于配额 ¥{quota}，运行正常。"
+               f"（剩余额度 ¥{quota - today_cost:.4f}）")
 
 st.caption("生产实现：配额状态写入 Redis，Agent 入口统一校验，超限即降级/拒绝。")

@@ -124,7 +124,7 @@ if live:
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("窗口调用量", f"{len(win):,}")
         c2.metric("Token 消耗", f"{win['tokens'].sum() / 1e6:.2f}M")
-        c3.metric("窗口成本", f"¥{win['cost'].sum():.1f}")
+        c3.metric("窗口成本", f"¥{win['cost'].sum():.4f}")
         c4.metric("平均延迟", f"{win['latency_ms'].mean() / 1000:.2f}s")
 
         # 实时趋势：按每 10 条分桶，形成滚动折线
@@ -168,7 +168,7 @@ else:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("今日调用量", f"{len(today_df):,}")
     c2.metric("Token 消耗", f"{today_df['tokens'].sum() / 1e6:.2f}M")
-    c3.metric("今日成本", f"¥{today_df['cost'].sum():.1f}")
+    c3.metric("今日成本", f"¥{today_df['cost'].sum():.4f}")
     c4.metric("平均延迟", f"{df['latency_ms'].mean() / 1000:.2f}s")
 
     # 真实 Trace 聚合（仅模拟模式下若存在真实落库 Trace，单独高亮）
