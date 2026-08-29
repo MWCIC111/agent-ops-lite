@@ -45,8 +45,14 @@ elif decision == "全量发布":
 else:
     st.caption("🔗 联动提示：先到「版本对比」页跑 A/B 测试，结论会自动带到这里。")
 
-# ---------- 1. 放量阶段定义（模拟数据） ----------
+# ---------- 1. 放量阶段定义 ----------
 # 真实场景中：每阶段从线上监控聚合该阶段的实际指标，健康阈值由 SLO 决定。
+# 此处「10% 小流量」基线优先取真实 Trace 聚合（真实数据模式），否则用模拟基线。
+from demo_data import load_traces, real_baseline
+
+_traces, _mode = load_traces()
+_base = real_baseline(_traces) if _mode == "real" else None
+
 STAGES = [
     {"name": "10% 小流量", "pct": 0.10, "success": 0.873, "err_rate": 0.013, "latency": 1.90},
     {"name": "50% 半量", "pct": 0.50, "success": 0.871, "err_rate": 0.014, "latency": 1.95},
@@ -54,6 +60,19 @@ STAGES = [
 ]
 ABNORMAL = {"success": 0.762, "err_rate": 0.091, "latency": 3.42}
 HEALTH_OK = {"err_rate": 0.05, "success": 0.80}  # 健康阈值：错误率<5% 且 成功率>80%
+
+if _base:
+    # 用真实生产健康度覆盖「10% 小流量」基线
+    STAGES[0] = {
+        "name": STAGES[0]["name"], "pct": STAGES[0]["pct"],
+        "success": _base["success_rate"],
+        "err_rate": 1 - _base["success_rate"],
+        "latency": _base["avg_latency_s"],
+    }
+    st.info("🟢 **真实数据模式**：当前阶段基线健康度（成功率 / 错误率 / 延迟）来自真实 Trace 聚合；"
+            "后续放量阶段为模拟推演。")
+else:
+    st.warning("🟡 模拟数据：数据库为空，当前为可复现模拟基线。播种真实数据后自动切换。")
 
 
 def current_metrics(stage):

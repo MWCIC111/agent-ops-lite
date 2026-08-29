@@ -15,13 +15,17 @@ from shared_state import init as sim_init, get as sim_get
 
 sim_init()
 
-from demo_data import load_demo_traces
+from demo_data import load_traces
 
 st.set_page_config(page_title="告警与异常 · agent-ops-lite", layout="wide")
 st.title("告警与异常")
 st.caption("慢调用 Top10 · 错误率趋势 · 失败 Trace 列表")
 
-traces = load_demo_traces()
+traces, mode = load_traces()
+if mode == "real":
+    st.success("🟢 真实数据：错误率 / 慢调用来自真实 Agent 运行 Trace（含播种注入的真实失败）。")
+else:
+    st.warning("🟡 模拟数据：数据库为空，当前为可复现模拟数据。播种真实数据后自动切换。")
 rows = [
     {
         "trace_id": t.trace_id,

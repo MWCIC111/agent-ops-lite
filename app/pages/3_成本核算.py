@@ -15,13 +15,17 @@ from shared_state import init as sim_init, get as sim_get
 
 sim_init()
 
-from demo_data import load_demo_traces
+from demo_data import load_traces
 
 st.set_page_config(page_title="成本核算 · agent-ops-lite", layout="wide")
 st.title("成本核算")
 st.caption("按 Agent / 日期维度拆解调用成本（¥），并模拟成本配额熔断")
 
-traces = load_demo_traces()
+traces, mode = load_traces()
+if mode == "real":
+    st.success("🟢 真实数据：成本按真实模型单价（deepseek-chat 等）折算，来自 agent_ops.db。")
+else:
+    st.warning("🟡 模拟数据：数据库为空，当前为可复现模拟数据。播种真实数据后自动切换为真实成本。")
 rows = [
     {
         "agent": t.agent,
@@ -53,7 +57,9 @@ with c2:
 # ---- 成本配额熔断模拟 ----
 st.subheader("成本配额熔断（模拟）")
 quota = st.slider("每日成本配额（¥）", min_value=10, max_value=200, value=80, step=5,
-                  help="今日成本约 ¥18（14 天模拟数据），把配额拖到 20 以下即可看到熔断效果")
+                  help=("真实数据模式：今日成本为真实 LLM 调用成本，可拖动配额观察熔断。"
+                        if mode == "real" else
+                        "模拟数据模式：把配额拖到 20 以下即可看到熔断效果"))
 today = df["date"].max()
 today_cost = df[df["date"] == today]["cost"].sum()
 

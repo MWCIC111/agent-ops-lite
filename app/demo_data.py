@@ -87,7 +87,10 @@ def load_real_traces() -> list[Trace]:
 
 
 def load_demo_traces(days: int = 14, n: int = 2000) -> list[Trace]:
-    """生成最近 n 天的模拟 Trace（按时间倒序），并合并真实落库 Trace。"""
+    """生成最近 n 天的模拟 Trace（按时间倒序），并合并真实落库 Trace。
+
+    注：新版统一数据源为 load_traces()（真实优先）。本函数保留作兜底/兼容。
+    """
     now = datetime.now()
     traces = []
     for _ in range(n):
@@ -104,6 +107,55 @@ def load_demo_traces(days: int = 14, n: int = 2000) -> list[Trace]:
     except Exception:
         pass
     return traces
+
+
+def load_traces() -> tuple[list[Trace], str]:
+    """统一数据源（真实优先）。
+
+    返回 (traces, mode)：
+      - mode == "real"：全部来自 agent_ops.db 的真实 LLM 调用落库 Trace
+        （真实 token / 延迟 / 成本 / 工具 / 知识库召回），全面板直接消费。
+      - mode == "mock"：数据库为空时的可复现模拟兜底（避免面板空白），
+        并显式标记，便于页面打「模拟数据」标识。
+
+    设计意图（面试可直接讲）：Demo 不是「画假面板」，换上真实数据源后
+    所有观测页面零改动——这就是 AgentOps 生产级可观测性。
+    """
+    real = load_real_traces()
+    if real:
+        return real, "real"
+    # 兜底：数据库为空，生成可复现模拟数据
+    now = datetime.now()
+    traces = []
+    for _ in range(2000):
+        at = now - timedelta(
+            minutes=random.randint(0, 14 * 24 * 60),
+            seconds=random.randint(0, 59),
+        )
+        traces.append(_gen_trace(at))
+    traces.sort(key=lambda t: t.started_at, reverse=True)
+    return traces, "mock"
+
+
+def real_baseline(traces: list[Trace]) -> dict:
+    """从真实 Trace 聚合生产基线指标，供版本对比 / 灰度发布页做真实基线。"""
+    if not traces:
+        return {}
+    n = len(traces)
+    succ = sum(1 for t in traces if t.status == "success") / n
+    lat = sum(t.latency_ms for t in traces) / n / 1000.0
+    tok = sum(t.tokens for t in traces) / n
+    tool_steps = [s.status for t in traces for s in t.steps if s.tool]
+    tool_succ = (
+        sum(1 for stt in tool_steps if stt == "success") / len(tool_steps)
+        if tool_steps else 0.0
+    )
+    return {
+        "success_rate": succ,
+        "avg_latency_s": lat,
+        "avg_tokens": tok,
+        "tool_success_rate": tool_succ,
+    }
 
 
 if __name__ == "__main__":

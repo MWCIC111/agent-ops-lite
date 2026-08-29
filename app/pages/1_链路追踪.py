@@ -6,13 +6,17 @@
 import streamlit as st
 import pandas as pd
 
-from demo_data import load_demo_traces
+from demo_data import load_traces
 
 st.set_page_config(page_title="链路追踪 · agent-ops-lite", layout="wide")
 st.title("链路追踪")
 st.caption("输入 Trace ID 查看一次 Agent 调用的完整执行链（含失败与重试步骤）")
 
-traces = load_demo_traces()
+traces, mode = load_traces()
+if mode == "real":
+    st.success("🟢 真实数据：来自 agent_ops.db 的真实 LLM 调用 Trace。")
+else:
+    st.warning("🟡 模拟数据：数据库为空，当前为可复现模拟 Trace。运行「真实 Agent」或「数据管理」播种真实数据后自动切换。")
 trace_map = {t.trace_id: t for t in traces}
 
 trace_id = st.selectbox("选择 Trace ID", list(trace_map.keys()))

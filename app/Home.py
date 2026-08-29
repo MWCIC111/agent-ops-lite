@@ -17,15 +17,15 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from demo_data import AGENTS, load_demo_traces
+from demo_data import AGENTS, load_traces
 from shared_state import init as sim_init, get as sim_get
 
 sim_init()
 
 st.set_page_config(page_title="agent-ops-lite · 总览", layout="wide")
 
-# ---------- 数据加载（静态基线）----------
-traces = load_demo_traces()
+# ---------- 数据加载（统一数据源：真实优先）----------
+traces, mode = load_traces()
 rows = [
     {
         "trace_id": t.trace_id,
@@ -44,7 +44,12 @@ df = pd.DataFrame(rows)
 
 # ---------- 标题 ----------
 st.title("agent-ops-lite · 总览 v0.1.0")
-st.caption("Agent 调用可观测面板（模拟数据）—— 接入真实数据源即可用于生产")
+if mode == "real":
+    st.success("🟢 **真实数据模式**：当前展示均来自 `agent_ops.db` 的真实 LLM 调用 Trace"
+               "（真实 token / 延迟 / 成本 / 工具 / 知识库召回）。")
+else:
+    st.warning("🟡 **模拟数据模式**：数据库为空，当前展示可复现模拟数据。"
+               "运行「真实 Agent」页或「数据管理」页一键播种真实数据后，本页将自动切换为真实数据。")
 
 # ---------- 系统状态横幅（跨页联动汇总）----------
 sim = sim_get()
@@ -166,16 +171,17 @@ else:
     c3.metric("今日成本", f"¥{today_df['cost'].sum():.1f}")
     c4.metric("平均延迟", f"{df['latency_ms'].mean() / 1000:.2f}s")
 
-    # 真实 Trace 聚合（由 8_真实Agent.py 写入 agent_ops.db，经 demo_data.load_demo_traces 合并）
-    REAL_AGENTS = {"研发管家 · 多Agent编排", "知源 · RAG问答", "通用问答 · DeepSeek"}
-    real_df = df[df["agent"].isin(REAL_AGENTS)]
-    if not real_df.empty:
-        st.subheader("今日真实调用（来自 agent_ops.db）")
-        r1, r2, r3, r4 = st.columns(4)
-        r1.metric("真实调用量", f"{len(real_df):,}")
-        r2.metric("真实 Token", f"{real_df['tokens'].sum():,}")
-        r3.metric("真实成本", f"¥{real_df['cost'].sum():.3f}")
-        r4.metric("平均延迟", f"{real_df['latency_ms'].mean() / 1000:.2f}s")
+    # 真实 Trace 聚合（仅模拟模式下若存在真实落库 Trace，单独高亮）
+    if mode == "mock":
+        REAL_AGENTS = {"研发管家 · 多Agent编排", "知源 · RAG问答", "通用问答 · DeepSeek"}
+        real_df = df[df["agent"].isin(REAL_AGENTS)]
+        if not real_df.empty:
+            st.subheader("今日真实调用（来自 agent_ops.db）")
+            r1, r2, r3, r4 = st.columns(4)
+            r1.metric("真实调用量", f"{len(real_df):,}")
+            r2.metric("真实 Token", f"{real_df['tokens'].sum():,}")
+            r3.metric("真实成本", f"¥{real_df['cost'].sum():.3f}")
+            r4.metric("平均延迟", f"{real_df['latency_ms'].mean() / 1000:.2f}s")
 
     # 近 14 天调用量趋势
     st.subheader("近 14 天调用量趋势")

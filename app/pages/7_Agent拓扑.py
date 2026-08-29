@@ -157,6 +157,27 @@ for name, (x, y, calls, succ, role, lat) in NODES.items():
                  "成功率": f"{nsucc:.1%}", "平均耗时": f"{nlat}ms", "状态": status})
 st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
+# ---------- 4.5 真实调用统计（来自 agent_ops.db）----------
+from demo_data import load_traces
+from collections import Counter
+
+_real_traces, _rmode = load_traces()
+if _rmode == "real":
+    st.subheader("📊 真实调用统计（来自 agent_ops.db）")
+    cnt = Counter(t.agent for t in _real_traces)
+    stats_rows = [
+        {
+            "Agent": a,
+            "调用次数": c,
+            "成功率": f"{(sum(1 for t in _real_traces if t.agent == a and t.status == 'success') / c):.1%}",
+        }
+        for a, c in cnt.most_common()
+    ]
+    st.dataframe(pd.DataFrame(stats_rows), width="stretch", hide_index=True)
+    st.caption(f"共 {len(_real_traces)} 条真实 Trace 已落库；与上方架构图的 Agent 一一对应。")
+else:
+    st.caption("💡 运行「真实 Agent」或「数据管理」页播种真实数据后，此处展示各 Agent 的真实调用统计。")
+
 # ---------- 5. 置信度融合 · 三层幻觉抑制 流水线 ----------
 st.subheader("🛡️ 置信度融合 · 三层幻觉抑制流水线")
 st.caption("研发管家在末段对所有 Agent 结论做质量闸门：三层抑制 + 置信度融合，高风险结论进入人工审核后才回写知识库。")

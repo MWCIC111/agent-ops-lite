@@ -7,13 +7,17 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-from demo_data import load_demo_traces
+from demo_data import load_traces
 
 st.set_page_config(page_title="工具分析 · agent-ops-lite", layout="wide")
 st.title("工具分析")
 st.caption("各工具（Function Calling）的调用量 / 成功率 / 平均耗时")
 
-traces = load_demo_traces()
+traces, mode = load_traces()
+if mode == "real":
+    st.success("🟢 真实数据：工具调用来自真实 Agent 运行（BM25 检索 / 垂直 Agent 等）。")
+else:
+    st.warning("🟡 模拟数据：数据库为空，当前为可复现模拟数据。播种真实数据后自动切换。")
 rows = []
 for t in traces:
     for s in t.steps:

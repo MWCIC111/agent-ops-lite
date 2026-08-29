@@ -21,9 +21,13 @@ st.set_page_config(page_title="版本对比 · A/B 测试", page_icon="🔬", la
 st.title("🔬 版本对比 · A/B 测试")
 st.caption("新版本上线前，先跑 A/B 对比：成功率 / 延迟 / 成本 三个维度，用数据决定是否全量发布。")
 
-# ---------- 1. 模拟数据生成 ----------
+# ---------- 1. 数据来源：真实基线优先 ----------
 # 真实场景中：从 A/B 流量分组各自采集 n 条 Trace，即可复用下面的对比逻辑。
-# 固定随机种子保证每次刷新数据一致、可复现。
+# 此处 v1.0 基线优先取真实 Trace 聚合（真实数据模式），否则用可复现模拟基线。
+from demo_data import load_traces, real_baseline
+
+_traces, _mode = load_traces()
+_base = real_baseline(_traces) if _mode == "real" else None
 
 
 @st.cache_data
@@ -49,11 +53,41 @@ def gen_traces(version: str, seed: int, n: int = 1000) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-df_v1 = gen_traces("v1.0", seed=10)
-df_v11 = gen_traces("v1.1", seed=11)
+def _real_df(base_metrics, improved: bool, n: int = 1000) -> pd.DataFrame:
+    """用真实基线指标生成 n 条 Trace（improved=True 表示 v1.1 假设优化）。"""
+    rng = random.Random(99)
+    sr = base_metrics["success_rate"]
+    lat = base_metrics["avg_latency_s"]
+    tok = base_metrics["avg_tokens"]
+    if improved:
+        sr = min(sr + 0.03, 0.99)
+        lat *= 0.8
+        tok *= 0.9
+    rows = []
+    for _ in range(n):
+        rows.append({
+            "version": "v1.1" if improved else "v1.0",
+            "success": rng.random() < sr,
+            "latency_s": round(max(lat * rng.gauss(1, 0.15), 0.1), 2),
+            "tokens": int(max(tok * rng.gauss(1, 0.1), 100)),
+        })
+    return pd.DataFrame(rows)
 
-# 工具成功率（演示用固定值；真实场景由工具调用记录聚合得到）
-TOOL_SUCCESS = {"v1.0": 0.91, "v1.1": 0.94}
+
+if _base:
+    df_v1 = _real_df(_base, improved=False)
+    df_v11 = _real_df(_base, improved=True)
+    TOOL_SUCCESS = {
+        "v1.0": _base["tool_success_rate"],
+        "v1.1": min(_base["tool_success_rate"] + 0.03, 0.99),
+    }
+    st.info("🟢 **真实数据模式**：v1.0 基线来自真实 Trace 聚合（成功率 / 延迟 / Token / 工具成功率）；"
+            "v1.1 为在其基础上的假设优化，用于演示 A/B 发布决策逻辑。")
+else:
+    df_v1 = gen_traces("v1.0", seed=10)
+    df_v11 = gen_traces("v1.1", seed=11)
+    # 工具成功率（演示用固定值；真实场景由工具调用记录聚合得到）
+    TOOL_SUCCESS = {"v1.0": 0.91, "v1.1": 0.94}
 
 # ---------- 2. 核心指标对比卡 ----------
 st.subheader("📊 核心指标对比")
