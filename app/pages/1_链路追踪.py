@@ -17,10 +17,20 @@ if mode == "real":
     st.success("🟢 真实数据：来自 agent_ops.db 的真实 LLM 调用 Trace。")
 else:
     st.warning("🟡 模拟数据：数据库为空，当前为可复现模拟 Trace。运行「真实 Agent」或「数据管理」播种真实数据后自动切换。")
-trace_map = {t.trace_id: t for t in traces}
 
-trace_id = st.selectbox("选择 Trace ID", list(trace_map.keys()))
+# 按 Agent 过滤，避免 Trace 多了之后淹没在 selectbox 里
+agents = sorted(set(t.agent for t in traces))
+c1, c2 = st.columns([1, 2])
+with c1:
+    selected_agent = st.selectbox("按 Agent 过滤", ["全部"] + agents)
+filtered_traces = (
+    traces if selected_agent == "全部" else [t for t in traces if t.agent == selected_agent]
+)
+trace_map = {t.trace_id: t for t in filtered_traces}
+with c2:
+    trace_id = st.selectbox("选择 Trace ID", list(trace_map.keys()))
 t = trace_map[trace_id]
+c2.caption(f"当前共 {len(filtered_traces)} 条 Trace")
 
 # ---- 概览卡片 ----
 ok = t.status == "success"
