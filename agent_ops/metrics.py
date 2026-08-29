@@ -64,8 +64,9 @@ def model_usage(collector: Collector | None = None) -> dict[str, dict[str, float
             usage[m]["tokens_in"] += s.tokens_in
             usage[m]["tokens_out"] += s.tokens_out
             usage[m]["tokens"] += s.tokens_in + s.tokens_out
+            price = MODEL_PRICE.get(s.model, (0.0, 0.0))  # 未知模型兜底，避免 KeyError
             usage[m]["cost_usd"] += (
-                s.tokens_in * MODEL_PRICE[s.model][0] + s.tokens_out * MODEL_PRICE[s.model][1]
+                s.tokens_in * price[0] + s.tokens_out * price[1]
             ) / 1000
     return dict(sorted(usage.items(), key=lambda kv: kv[1]["cost_usd"], reverse=True))
 

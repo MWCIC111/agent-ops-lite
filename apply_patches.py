@@ -4,11 +4,13 @@
 用法（在服务器上，venv 已激活、位于仓库根 /home/ubuntu/agent-ops-lite）：
     python apply_patches.py
 
-本脚本只做两处仓库内改动 + 一处依赖，幂等（重复运行安全）：
-  1. agent_ops/cost.py  —— 未知模型兜底为 0 价，避免 summarize() 抛 KeyError
+本脚本做仓库内改动，幂等（重复运行安全）：
+  1. agent_ops/cost.py  —— 历史兜底（注：未知模型 KeyError 的根因已在 tracer.summarize /
+                          metrics.model_usage 内置 .get(model,(0,0)) 兜底，此步现已冗余但保留无害）
   2. app/demo_data.py   —— load_demo_traces() 追加真实落库 Trace（全面板可消费）
-  3. app/requirements.txt —— 确保含 openai
-页面文件请单独把 real_agent_page.py 拷到 app/pages/8_真实Agent.py（见指南）。
+  3. app/requirements.txt —— 确保含 openai（已并入源码，此步会 skip）
+
+注意：8_真实Agent.py 已随仓库提交，无需单独拷贝；未知模型兜底已移至核心库内置。
 
 安全注意：API Key 不写在仓库里；通过 /home/ubuntu/agent-ops-lite/.env 注入，由 systemd 加载。
 """
