@@ -45,9 +45,38 @@ SCENARIOS = {
     "通用问答": "单步直接调用",
 }
 
+# 每个场景对应的示例提问，按所选场景动态展示，点击即填入提问框
+EXAMPLE_QUESTIONS = {
+    "研发管家 · 研发问答": [
+        "如何设计多 Agent 的共享状态？",
+        "抗原设计阶段如何抑制模型幻觉？",
+        "研发管家的置信度融合策略怎么实现？",
+        "方案规划 Agent 和故障诊断 Agent 如何协作？",
+        "如何评估一个 IVD 研发 Agent 系统的可靠性？",
+    ],
+    "知源 · RAG 问答": [
+        "糖尿病应该怎么控制饮食？",
+        "高血压患者日常需要注意什么？",
+        "幽门螺杆菌感染应该怎么治疗？",
+        "甲状腺结节需要做手术吗？",
+        "感冒了应该多喝水还是吃维生素 C？",
+    ],
+    "通用问答": [
+        "用一句话解释什么是大语言模型",
+        "LangGraph 和 LangChain 的区别是什么？",
+        "什么是检索增强生成（RAG）？",
+        "如何向非技术人员解释什么是 Agent？",
+        "Transformer 注意力机制的核心思想是什么？",
+    ],
+}
+
 st.set_page_config(page_title="真实 Agent · agent-ops-lite", layout="wide")
 st.title("真实 Agent 调用（DeepSeek API）")
 st.caption("调用 DeepSeek 真实大模型，经 @trace 采集真实 token / 延迟 / 成本，落库后全面板可消费")
+
+# 提问框初始值（示例问题点击后会被覆盖）
+if "question_input" not in st.session_state:
+    st.session_state.question_input = "如何设计多 Agent 的共享状态？"
 
 
 # ------------------- UI -------------------
@@ -56,7 +85,16 @@ model = st.text_input("模型名", value=DEFAULT_MODEL,
                       help="例如 deepseek-chat、deepseek-reasoner；需在 .env 中已配置 DEEPSEEK_API_KEY")
 scenario = st.selectbox("场景（对应简历项目）", list(SCENARIOS.keys()),
                         format_func=lambda k: f"{k} — {SCENARIOS[k]}")
-question = st.text_area("提问", value="如何设计多 Agent 的共享状态？", height=80)
+
+# 按当前场景展示示例问题，点击即填入提问框
+examples = EXAMPLE_QUESTIONS[scenario]
+st.caption("💡 快速选择示例问题：")
+picked = st.pills("示例问题", examples, selection_mode="single", key="example_pills")
+if picked is not None:
+    st.session_state.question_input = picked
+    st.rerun()
+
+question = st.text_area("提问", key="question_input", height=80)
 
 if st.button("运行真实 Agent", type="primary"):
     if not question.strip():
