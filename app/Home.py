@@ -16,6 +16,7 @@ from datetime import datetime
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import streamlit.components.v1 as components
 
 from demo_data import AGENTS, load_traces
 from shared_state import init as sim_init, get as sim_get
@@ -44,6 +45,29 @@ df = pd.DataFrame(rows)
 
 # ---------- 标题 ----------
 st.title("agent-ops-lite · 总览 v0.1.0")
+
+# ---------- 实时现实时间（取访问者浏览器本地时间，秒级走动，不耗服务器资源）----------
+components.html(
+    """
+    <div id="liveclock"
+         style="font-size:13px;color:#8a8a8a;font-family:ui-monospace,Menlo,Consolas,monospace;"></div>
+    <script>
+    (function () {
+      function pad(n) { return String(n).padStart(2, '0'); }
+      function tick() {
+        var d = new Date();
+        var s = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' +
+                pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        var el = document.getElementById('liveclock');
+        if (el) el.textContent = '🕐 当前现实时间（本地）：' + s;
+      }
+      tick();
+      setInterval(tick, 1000);
+    })();
+    </script>
+    """,
+    height=30,
+)
 if mode == "real":
     st.success("🟢 **真实数据模式**：当前展示均来自 `agent_ops.db` 的真实 LLM 调用 Trace"
                "（真实 token / 延迟 / 成本 / 工具 / 知识库召回）。")
