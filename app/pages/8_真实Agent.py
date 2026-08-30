@@ -86,13 +86,19 @@ model = st.text_input("模型名", value=DEFAULT_MODEL,
 scenario = st.selectbox("场景（对应简历项目）", list(SCENARIOS.keys()),
                         format_func=lambda k: f"{k} — {SCENARIOS[k]}")
 
-# 按当前场景展示示例问题，点击即填入提问框
+# 按当前场景展示示例问题，点击按钮即填入提问框
 examples = EXAMPLE_QUESTIONS[scenario]
-st.caption("💡 快速选择示例问题：")
-picked = st.pills("示例问题", examples, selection_mode="single", key="example_pills")
-if picked is not None:
-    st.session_state.question_input = picked
-    st.rerun()
+scenario_idx = list(SCENARIOS.keys()).index(scenario)
+st.caption("💡 快速选择示例问题（点击即填入）：")
+cols = st.columns(len(examples))
+for i, ex in enumerate(examples):
+    if cols[i].button(ex, key=f"qex_s{scenario_idx}_q{i}"):
+        st.session_state.question_input = ex
+        st.rerun()
+
+# 提示当前已选示例问题，避免用户以为没填入
+if st.session_state.question_input in examples:
+    st.caption(f"✅ 已填入示例问题：{st.session_state.question_input}")
 
 question = st.text_area("提问", key="question_input", height=80)
 
