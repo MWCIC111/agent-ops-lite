@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+import concurrent.futures  # 4 个垂直 Agent 并行执行，降低多步编排耗时
 
 # ---- 让本模块能 import 到仓库根的 agent_ops 与 app/ 下的 rag_retriever ----
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -51,7 +52,8 @@ def _timed(fn):
     return result, ms
 
 
-def _deepseek_chat(model: str, messages: list, temperature: float = 0.3):
+def _deepseek_chat(model: str, messages: list, temperature: float = 0.3,
+                   max_tokens: int = 400):
     from openai import OpenAI
 
     if not OPENAI_API_KEY:
@@ -61,7 +63,8 @@ def _deepseek_chat(model: str, messages: list, temperature: float = 0.3):
 
     client = OpenAI(base_url=OPENAI_BASE_URL, api_key=OPENAI_API_KEY)
     resp = client.chat.completions.create(
-        model=model, messages=messages, temperature=temperature
+        model=model, messages=messages, temperature=temperature,
+        max_tokens=max_tokens,
     )
     usage = resp.usage
     return (
@@ -116,16 +119,28 @@ def run_research_butler(question: str, model: str) -> str:
     state["orchestration"] = orch
     record_step("Orchestrator · 任务编排", model=model, tokens_in=oin, tokens_out=oout, latency_ms=oms)
 
-    # 3) 4 个垂直 Agent 串流（共享 State 串联）
-    parts: list = []
-    for agent_name, sys_prompt in BUTLER_AGENTS.items():
+    # 3) 4 个垂直 Agent 并行（共享 State 串联，彼此无依赖，并行调用降低编排耗时）
+    def _run_vertical(agent_name: str, sys_prompt: str):
         msgs = [
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content":
                 f"共享状态：\n- 问题：{question}\n- 检索依据：{ctx[:1000]}\n"
                 f"- Orchestrator 指令：{orch[:600]}\n请基于以上输出你的专业结论。"},
         ]
-        ans, tin, tout, ms = _timed(lambda m=msgs: _deepseek_chat(model, m))
+        return agent_name, _timed(lambda m=msgs: _deepseek_chat(model, m, max_tokens=400))
+
+    # 并发执行，按原始顺序收集结果（保持 Trace 步骤顺序稳定）
+    _results: dict = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+        _futs = {ex.submit(_run_vertical, n, sp): n
+                 for n, sp in BUTLER_AGENTS.items()}
+        for _f in concurrent.futures.as_completed(_futs):
+            _n, _payload = _f.result()
+            _results[_n] = _payload
+
+    parts: list = []
+    for agent_name, sys_prompt in BUTLER_AGENTS.items():
+        ans, tin, tout, ms = _results[agent_name]
         record_step(agent_name, model=model, tool="垂直Agent·DeepSeek",
                     tokens_in=tin, tokens_out=tout, latency_ms=ms)
         state[agent_name] = ans
