@@ -6,6 +6,8 @@
           本页会针对该 Agent 单独触发告警（模拟真实监控的 Agent 维度告警）。
 """
 import streamlit as st
+from common import show_clock, page_visit
+from op_log import log_operation
 import pandas as pd
 import plotly.express as px
 
@@ -19,6 +21,8 @@ from demo_data import load_traces
 
 st.set_page_config(page_title="告警与异常 · agent-ops-lite", layout="wide")
 st.title("告警与异常")
+show_clock()
+page_visit("告警与异常")
 st.caption("慢调用 Top10 · 错误率趋势 · 失败 Trace 列表")
 
 traces, mode = load_traces()

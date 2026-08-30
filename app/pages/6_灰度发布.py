@@ -10,6 +10,8 @@ import random
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from common import show_clock, page_visit
+from op_log import log_operation
 
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -20,6 +22,8 @@ sim_init()
 st.set_page_config(page_title="灰度发布 · 渐进放量", page_icon="🚦", layout="wide")
 
 st.title("🚦 灰度发布 · 渐进放量")
+show_clock()
+page_visit("灰度发布")
 st.caption("新版本发布不是一把梭：10% → 50% → 100% 渐进放量，每个阶段监控健康度，异常自动回滚。")
 
 # ---------- 0. 会话状态（与全局共享状态打通） ----------

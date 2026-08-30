@@ -14,6 +14,8 @@ import random
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from common import show_clock, page_visit
+from op_log import log_operation
 
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -24,6 +26,8 @@ sim_init()  # 初始化全局共享状态
 st.set_page_config(page_title="Agent 拓扑 · 研发管家架构", page_icon="🕸️", layout="wide")
 
 st.title("🕸️ Agent 拓扑 · 研发管家（LangGraph 式集中式架构）")
+show_clock()
+page_visit("Agent拓扑")
 st.caption("Orchestrator 集中式编排 + 共享 State + 4 个垂直 Agent（抗原设计 / 方案规划 / 故障诊断 / 资料整理）——"
            "节点大小 = 调用量，颜色 = 成功率，悬停查看职责。")
 

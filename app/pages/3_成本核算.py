@@ -6,6 +6,8 @@
           配额状态存在 Redis、所有面板统一读取）。
 """
 import streamlit as st
+from common import show_clock, page_visit
+from op_log import log_operation
 import pandas as pd
 import plotly.express as px
 
@@ -19,6 +21,8 @@ from demo_data import load_traces
 
 st.set_page_config(page_title="成本核算 · agent-ops-lite", layout="wide")
 st.title("成本核算")
+show_clock()
+page_visit("成本核算")
 st.caption("按 Agent / 日期维度拆解调用成本（¥），并模拟成本配额熔断")
 
 traces, mode = load_traces()

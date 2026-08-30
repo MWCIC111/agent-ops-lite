@@ -4,12 +4,16 @@
 失败步骤红色高亮；重试步骤可见（真实生产中最难排查的就是"失败→重试"链路）。
 """
 import streamlit as st
+from common import show_clock, page_visit
+from op_log import log_operation
 import pandas as pd
 
 from demo_data import load_traces
 
 st.set_page_config(page_title="链路追踪 · agent-ops-lite", layout="wide")
 st.title("链路追踪")
+show_clock()
+page_visit("链路追踪")
 st.caption("输入 Trace ID 查看一次 Agent 调用的完整执行链（含失败与重试步骤）")
 
 traces, mode = load_traces()

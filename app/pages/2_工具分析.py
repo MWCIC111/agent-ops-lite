@@ -4,6 +4,8 @@
 展示每个工具的调用次数、成功率、平均耗时——生产中"哪个工具拖垮了整体"一眼可见。
 """
 import streamlit as st
+from common import show_clock, page_visit
+from op_log import log_operation
 import pandas as pd
 import plotly.express as px
 
@@ -11,6 +13,8 @@ from demo_data import load_traces
 
 st.set_page_config(page_title="工具分析 · agent-ops-lite", layout="wide")
 st.title("工具分析")
+show_clock()
+page_visit("工具分析")
 st.caption("各工具（Function Calling）的调用量 / 成功率 / 平均耗时")
 
 traces, mode = load_traces()

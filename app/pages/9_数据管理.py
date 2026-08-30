@@ -16,6 +16,8 @@ from datetime import datetime
 
 import pandas as pd
 import streamlit as st
+from common import show_clock, page_visit
+from op_log import log_operation
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, _REPO_ROOT)
@@ -29,6 +31,8 @@ SEED_LOG = os.path.join(_REPO_ROOT, "seed.log")
 
 st.set_page_config(page_title="数据管理 · agent-ops-lite", layout="wide")
 st.title("🗄️ 数据管理（真实数据源）")
+show_clock()
+page_visit("数据管理")
 st.caption("所有观测页面统一读取 agent_ops.db 的真实 Trace；数据库为空时回退模拟数据。")
 
 # ---------- 1. 当前真实数据统计 ----------
@@ -86,6 +90,8 @@ if run_col.button("🚀 在服务器后台运行播种", type="primary"):
         )
         st.success("已在后台启动播种（研发管家较慢，请耐心等待）。"
                    "播种期间请勿在「真实 Agent」页点运行，避免并发写库。刷新本页查看进度。")
+        log_operation("数据管理", "播种启动",
+                      f"rag={rag_n} butler={butler_n} general={general_n} failures={fail_n}")
     except Exception as e:  # noqa: BLE001
         st.error(f"启动失败：{e}")
 
@@ -107,4 +113,5 @@ if st.checkbox("我确认要清空 agent_ops.db 中的所有真实 Trace"):
     if st.button("🗑️ 确认清空", type="primary"):
         SQLiteStore(DB_PATH).clear()
         st.success("已清空。刷新后所有页面将回退为模拟数据，可重新播种。")
+        log_operation("数据管理", "清空数据", "已删除 agent_ops.db 全部真实 Trace")
         st.rerun()

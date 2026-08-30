@@ -20,6 +20,8 @@ import os
 import sys
 
 import streamlit as st
+from common import show_clock, page_visit
+from op_log import log_operation
 
 # ---- 让 app/pages/ 能 import 到仓库根的 agent_ops 与 app/ 下的 agent_runner ----
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -72,6 +74,8 @@ EXAMPLE_QUESTIONS = {
 
 st.set_page_config(page_title="真实 Agent · agent-ops-lite", layout="wide")
 st.title("真实 Agent 调用（DeepSeek API）")
+show_clock()
+page_visit("真实Agent")
 st.caption("调用 DeepSeek 真实大模型，经 @trace 采集真实 token / 延迟 / 成本，落库后全面板可消费")
 
 # 提问框初始值（示例问题点击后会被覆盖）
@@ -112,6 +116,7 @@ if st.button("运行真实 Agent", type="primary"):
             try:
                 answer = run_real_agent(scenario, question.strip(), model.strip())
                 st.success("调用完成，已落库 agent_ops.db（其余 8 个页面可直接看到真实 Trace）")
+                log_operation("真实Agent", "运行成功", f"{scenario}：{question.strip()[:60]}")
                 st.subheader("回答")
                 st.markdown(answer)
                 if _LAST_HITS:
@@ -122,6 +127,7 @@ if st.button("运行真实 Agent", type="primary"):
                             st.write(h["content"])
             except Exception as e:  # noqa: BLE001
                 st.error(f"调用失败：{type(e).__name__}: {e}")
+                log_operation("真实Agent", "运行失败", f"{scenario}：{question.strip()[:60]} - {type(e).__name__}")
                 st.info("检查：/home/ubuntu/agent-ops-lite/.env 是否配置了 DEEPSEEK_API_KEY；systemctl 是否已重启加载环境变量")
 
 # ------------------- 最近真实 Trace -------------------

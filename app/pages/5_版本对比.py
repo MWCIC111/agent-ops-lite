@@ -9,6 +9,8 @@ import random
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from common import show_clock, page_visit
+from op_log import log_operation
 
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,6 +21,8 @@ sim_init()
 st.set_page_config(page_title="版本对比 · A/B 测试", page_icon="🔬", layout="wide")
 
 st.title("🔬 版本对比 · A/B 测试")
+show_clock()
+page_visit("版本对比")
 st.caption("新版本上线前，先跑 A/B 对比：成功率 / 延迟 / 成本 三个维度，用数据决定是否全量发布。")
 
 # ---------- 1. 数据来源：真实基线优先 ----------
