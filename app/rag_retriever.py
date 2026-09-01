@@ -15,12 +15,17 @@ from rank_bm25 import BM25Okapi
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DOCS_PATH = os.path.join(_REPO_ROOT, "rag_data", "docs.jsonl")
+_REVIEWED_PATH = os.path.join(_REPO_ROOT, "rag_data", "reviewed.jsonl")
 
 _cache: dict = {}
 
 
 def _load():
-    """Load docs + build BM25 index once (lazy, cached in-process)."""
+    """Load docs + build BM25 index once (lazy, cached in-process).
+
+    额外加载 rag_data/reviewed.jsonl（人工审核回写闭环产出的知识），
+    使审核通过后的答案可被 BM25 召回，实现"越用越准"。
+    """
     if "index" not in _cache:
         docs = []
         with open(_DOCS_PATH, "r", encoding="utf-8") as f:
@@ -28,6 +33,16 @@ def _load():
                 line = line.strip()
                 if line:
                     docs.append(json.loads(line))
+        # 人工回写知识（若存在）
+        if os.path.exists(_REVIEWED_PATH):
+            with open(_REVIEWED_PATH, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            docs.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            pass
         corpus = [lcut(d["content"]) for d in docs]
         _cache["docs"] = docs
         _cache["index"] = BM25Okapi(corpus)

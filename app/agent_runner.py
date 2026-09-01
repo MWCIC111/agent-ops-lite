@@ -97,68 +97,16 @@ BUTLER_AGENTS = {
 
 @trace(agent="研发管家 · 多Agent编排", collector=collector)
 def run_research_butler(question: str, model: str) -> str:
-    """真实多步编排：共享State检索 -> Orchestrator编排 -> 4垂直Agent -> 置信度融合。"""
+    """真实多步编排（真 LangGraph StateGraph）：共享State检索 → Orchestrator 编排 →
+    4 垂直 Agent(Send 扇出) → 置信度融合 + 三层幻觉抑制 → 低置信转人工审核队列。
+
+    底层委托 app/butler_graph.run_butler，复用本模块的 _deepseek_chat / _retrieve_context，
+    保持返回 str 与 7 步 Trace 顺序不变（8_真实Agent.py 与 scripts/verify_butler.py 兼容）。
+    """
     MODEL_PRICE.setdefault(model, (0.0, 0.0))
-
-    state: dict = {"question": question}
-
-    # 1) 共享 State：知识检索
-    ctx, hits, rms = _timed(lambda: _retrieve_context(question, top_k=4))
-    _LAST_HITS[:] = hits
-    state["context"] = ctx
-    record_step("共享State · 知识检索", model=model, tool="BM25检索(华佗百科)",
-                tokens_in=0, tokens_out=0, latency_ms=rms)
-
-    # 2) Orchestrator 集中式任务编排
-    orch_msgs = [
-        {"role": "system", "content": "你是研发管家的 Orchestrator，集中式编排 4 个垂直 Agent"
-         "（抗原设计 / 方案规划 / 故障诊断 / 资料整理）。基于问题与检索依据，向每个 Agent 下发结构化子任务指令。"},
-        {"role": "user", "content": f"问题：{question}\n检索依据摘要：\n{ctx[:1500]}"},
-    ]
-    orch, oin, oout, oms = _timed(lambda: _deepseek_chat(model, orch_msgs))
-    state["orchestration"] = orch
-    record_step("Orchestrator · 任务编排", model=model, tokens_in=oin, tokens_out=oout, latency_ms=oms)
-
-    # 3) 4 个垂直 Agent 并行（共享 State 串联，彼此无依赖，并行调用降低编排耗时）
-    def _run_vertical(agent_name: str, sys_prompt: str):
-        msgs = [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content":
-                f"共享状态：\n- 问题：{question}\n- 检索依据：{ctx[:1000]}\n"
-                f"- Orchestrator 指令：{orch[:600]}\n请基于以上输出你的专业结论。"},
-        ]
-        return agent_name, _timed(lambda m=msgs: _deepseek_chat(model, m, max_tokens=400))
-
-    # 并发执行，按原始顺序收集结果（保持 Trace 步骤顺序稳定）
-    _results: dict = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
-        _futs = {ex.submit(_run_vertical, n, sp): n
-                 for n, sp in BUTLER_AGENTS.items()}
-        for _f in concurrent.futures.as_completed(_futs):
-            _n, _payload = _f.result()
-            _results[_n] = _payload
-
-    parts: list = []
-    for agent_name, sys_prompt in BUTLER_AGENTS.items():
-        ans, tin, tout, ms = _results[agent_name]
-        record_step(agent_name, model=model, tool="垂直Agent·DeepSeek",
-                    tokens_in=tin, tokens_out=tout, latency_ms=ms)
-        state[agent_name] = ans
-        parts.append(f"### {agent_name}\n{ans}")
-
-    # 4) 置信度融合 + 三层幻觉抑制
-    fuse_msgs = [
-        {"role": "system", "content": "你是置信度融合与幻觉抑制模块：综合各垂直 Agent 结论，做三层校验"
-         "（工具层事实一致性 → LLM 层逻辑自洽 → 输出层与检索依据对齐），给出最终可信结论与置信度（高/中/低）。"},
-        {"role": "user", "content": f"问题：{question}\n检索依据：{ctx[:1000]}\n各 Agent 结论：\n" + "\n\n".join(parts)},
-    ]
-    fuse, fin, fout, fms = _timed(lambda: _deepseek_chat(model, fuse_msgs))
-    record_step("置信度融合 · 三层幻觉抑制", model=model, tokens_in=fin, tokens_out=fout, latency_ms=fms)
-
-    return (
-        f"## 研发管家 · 多Agent编排结果\n\n"
-        f"{fuse}\n\n---\n\n" + "\n\n".join(parts)
-    )
+    from butler_graph import run_butler  # 惰性导入，避免循环依赖
+    res = run_butler(question, model)
+    return res["answer"]
 
 
 @trace(agent="知源 · RAG问答", collector=collector)

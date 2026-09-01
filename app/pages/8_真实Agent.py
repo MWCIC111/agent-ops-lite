@@ -5,8 +5,8 @@
   一次真实 LLM 调用 -> 真实 token / 延迟 / 成本 -> 自动落 SQLite -> 其余 8 个观测页面直接消费。
 
 三个场景对应简历项目：
-  - 研发管家 · 研发问答：LangGraph 式集中式多 Agent 编排（Orchestrator + 共享 State +
-    4 垂直 Agent + 置信度融合·三层幻觉抑制），每一步 record_step，Trace 出现多节点。
+  - 研发管家 · 研发问答：真 LangGraph 集中式多 Agent 编排（Orchestrator + 共享 State +
+    4 垂直 Agent 经 Send 扇出 + 置信度融合·三层幻觉抑制 + 低置信转人工回写闭环），每一步 record_step，Trace 出现多节点。
   - 知源 · RAG 问答：BM25 真实检索（华佗百科知识库）增强生成。
   - 通用问答：单步直接调用。
 
@@ -42,7 +42,7 @@ from agent_ops import SQLiteStore  # noqa: E402
 DB_PATH = os.path.join(_REPO_ROOT, "agent_ops.db")
 
 SCENARIOS = {
-    "研发管家 · 研发问答": "LangGraph 式集中式多 Agent：Orchestrator + 共享 State + 4 垂直 Agent + 置信度融合·三层幻觉抑制",
+    "研发管家 · 研发问答": "真 LangGraph 集中式多 Agent：Orchestrator + 共享 State + 4 垂直 Agent(Send扇出) + 置信度融合·三层幻觉抑制 + 低置信转人工回写闭环",
     "知源 · RAG 问答": "检索增强生成（BM25 · 华佗百科知识库）",
     "通用问答": "单步直接调用",
 }
