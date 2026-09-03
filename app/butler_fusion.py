@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 from typing import Tuple
 
 OPENAI_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
@@ -22,6 +23,12 @@ DEFAULT_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 GATE = 0.50  # 低于此置信度 → 转人工审核队列
 
 _HEDGE_WORDS = ("不确定", "无法", "缺乏", "没有足够", "不能回答", "无法回答", "不知道", "不足")
+
+# 兜底强否定词表（仅当模型未按"判定：可信/不可信"格式输出时，检查文本开头 40 字）：
+# 实测（2026-09-03）：库外问题下 DeepSeek 输出几乎恒定以"无法基于/无法给出/不可信"开头；
+# 用全文词表会误伤正常答案里的"检索片段相关性评估表"（表格内写"该片段与问题无关"是评估过程，
+# 不是最终判定），故只做开头快检兜底，主信号是首行结构化判定。
+_ALIGN_FAIL = ("无法基于", "无法给出", "无法回答", "不能回答", "不可信", "拒绝", "抱歉", "无法提供")
 
 
 def _sigmoid(x: float) -> float:
@@ -48,6 +55,23 @@ def _logprob_component(mean_logprob: float) -> float:
     return _sigmoid(mean_logprob)
 
 
+def _extract_verdict(text: str) -> bool | None:
+    """解析融合模块首行的结构化判定。
+
+    返回 True=可信 / False=不可信 / None=未按格式输出。
+    用显式判定行而不是全文词表匹配，是为了把"输出层与检索依据对齐"变成
+    模型必须表态的结构化信号——全文搜"无关/无法"会误伤正常答案里的
+    "检索片段相关性评估"过程描述（2026-09-03 实测踩坑）。
+    """
+    head = (text or "").strip()
+    if not head:
+        return None
+    m = re.search(r"判定\s*[:：]\s*(可信|不可信)", head.splitlines()[0])
+    if m:
+        return m.group(1) == "可信"
+    return None
+
+
 def fusion_with_confidence(
     model: str,
     question: str,
@@ -66,8 +90,11 @@ def fusion_with_confidence(
 
     sys_prompt = (
         "你是置信度融合与幻觉抑制模块：综合各垂直 Agent 结论，做三层校验"
-        "（工具层事实一致性 → LLM 层逻辑自洽 → 输出层与检索依据对齐），"
-        "给出最终可信结论。"
+        "（工具层事实一致性 → LLM 层逻辑自洽 → 输出层与检索依据对齐）。\n"
+        "输出要求：第一行必须是判定行，格式严格为——\n"
+        "判定：可信   （当检索依据足以支撑回答、且三层校验通过时）\n"
+        "判定：不可信 （当检索依据与问题不对齐 / 信息不足 / 各 Agent 结论不可靠时）\n"
+        "第一行之后输出详细校验过程与最终可信结论。"
     )
     user_content = (
         f"问题：{question}\n检索依据：{ctx[:1000]}\n各 Agent 结论：\n" + "\n\n".join(parts)
@@ -117,7 +144,20 @@ def fusion_with_confidence(
 
     retr_comp = _retrieval_component(top_bm25)
     rule_comp = _rule_component(text)
-    confidence = round(0.40 * retr_comp + 0.35 * lp_comp + 0.25 * rule_comp, 3)
+    # 输出层对齐校验：模型首行判定"不可信" → 乘性强惩罚 ×0.35，
+    # 使"检索依据与问题不对齐/硬编回答"必然跌破 GATE 转人工（2026-09-03 实测校准）。
+    verdict = _extract_verdict(text)
+    if verdict is False:
+        align_ok = False
+    elif verdict is True:
+        align_ok = True
+    else:
+        # 模型未按格式输出 → 兜底：只看文本开头 40 字内的强否定信号（避免误伤评估过程描述）
+        align_ok = not any(w in text.strip()[:40] for w in _ALIGN_FAIL)
+    confidence = round(
+        (0.40 * retr_comp + 0.35 * lp_comp + 0.25 * rule_comp) * (1.0 if align_ok else 0.35),
+        3,
+    )
 
     # 检索几乎零命中（无 token 重叠）→ 强制低置信，必转人工
     if top_bm25 <= 0.0:

@@ -139,7 +139,14 @@ def record_agents_node(state: ButlerState) -> dict:
 
 
 def fusion_node(state: ButlerState) -> dict:
-    """置信度融合 + 三层幻觉抑制 + 数值门控 + （低置信）入审核队列。"""
+    """置信度融合 + 三层幻觉抑制 + 数值门控 + （低置信）入审核队列。
+
+    数据飞轮采信分支（2026-09-03 实测校准）：检索命中"人工审核回写"知识
+    （source=人工回写）时，视为系统最高可信来源——人工确认过的 QA 知识
+    直接采信（conf=0.80），不再让模型自由发挥（防幻觉），也不进审核队列。
+    实测中无此分支时，融合 LLM 对"回写后复问"仍倾向判不可信（4 垂直 Agent
+    输出与通用问题错配），导致闭环"回写 → 复问命中 → 置信度跳升"不成立。
+    """
     parts = []
     for name, _ in BUTLER_AGENTS.items():
         for r in state["agent_results"]:
@@ -147,20 +154,36 @@ def fusion_node(state: ButlerState) -> dict:
                 parts.append(f"### {name}\n{r['ans']}")
                 break
     top_bm25 = max((h.get("score", 0.0) for h in state["hits"]), default=0.0)
-    text, confidence, tin, tout, ms = fusion_with_confidence(
-        state["model"], state["question"], state["context"], parts, top_bm25
-    )
+
+    reviewed_hits = [
+        h for h in state["hits"]
+        if h.get("source") == "人工回写" or h.get("title") == "人工审核补充"
+    ]
+    need_human = False
+    review_id = None
+    if reviewed_hits:
+        # 人工审核知识命中 → 直接采信（数据飞轮闭环的高可信来源）
+        content = reviewed_hits[0].get("content", "")
+        text = content.split("答：", 1)[1].strip() if "答：" in content else content
+        confidence = 0.80
+        tin = tout = 0
+        ms = 1
+        note = "（人工审核回写知识命中 · 直接采信）"
+    else:
+        text, confidence, tin, tout, ms = fusion_with_confidence(
+            state["model"], state["question"], state["context"], parts, top_bm25
+        )
+        need_human = confidence < GATE
+        if need_human:
+            review_id = review_add(state["question"], text, confidence)
+        note = "（低于阈值，已转人工审核队列）" if need_human else ""
+
     record_step("置信度融合 · 三层幻觉抑制", model=state["model"],
                 tool="融合+三层幻觉抑制", tokens_in=tin, tokens_out=tout, latency_ms=ms)
 
-    need_human = confidence < GATE
-    review_id = None
-    if need_human:
-        review_id = review_add(state["question"], text, confidence)
-
     full = (
         f"## 研发管家 · 多Agent编排结果\n\n{text}\n\n---\n\n" + "\n\n".join(parts)
-        + f"\n\n> 置信度：{confidence:.2f}" + ("（低于阈值，已转人工审核队列）" if need_human else "")
+        + f"\n\n> 置信度：{confidence:.2f}" + (f" {note}" if note else "")
     )
     return {"fusion_text": text, "confidence": confidence,
             "need_human": need_human, "review_id": review_id, "answer": full}

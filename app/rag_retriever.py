@@ -20,13 +20,27 @@ _REVIEWED_PATH = os.path.join(_REPO_ROOT, "rag_data", "reviewed.jsonl")
 _cache: dict = {}
 
 
+def _reviewed_mtime() -> float | None:
+    """reviewed.jsonl 的 mtime（不存在返回 None）。用作缓存失效探针。"""
+    try:
+        return os.path.getmtime(_REVIEWED_PATH) if os.path.exists(_REVIEWED_PATH) else None
+    except OSError:
+        return None
+
+
 def _load():
-    """Load docs + build BM25 index once (lazy, cached in-process).
+    """Load docs + build BM25 index (lazy, cached in-process, auto-refresh).
 
     额外加载 rag_data/reviewed.jsonl（人工审核回写闭环产出的知识），
     使审核通过后的答案可被 BM25 召回，实现"越用越准"。
+
+    缓存失效：索引构建后记录 reviewed.jsonl 的 mtime；每次调用探测一次
+    （os.path.getmtime 为纳秒级系统调用，开销可忽略）。审核通过追加一行
+    → mtime 变化 → 下次检索自动重建索引 → "回写 → 复问命中 → 置信度跳升"
+    的闭环在单次进程内即可演示，无需重启。
     """
-    if "index" not in _cache:
+    mtime = _reviewed_mtime()
+    if "index" not in _cache or _cache.get("_rev_mtime") != mtime:
         docs = []
         with open(_DOCS_PATH, "r", encoding="utf-8") as f:
             for line in f:
@@ -47,6 +61,7 @@ def _load():
         _cache["docs"] = docs
         _cache["index"] = BM25Okapi(corpus)
         _cache["size"] = len(docs)
+        _cache["_rev_mtime"] = mtime
     return _cache["docs"], _cache["index"], _cache["size"]
 
 
