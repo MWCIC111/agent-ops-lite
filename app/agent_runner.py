@@ -16,7 +16,9 @@ from __future__ import annotations
 import os
 import sys
 import time
+import openai  # 用于捕获限流 / 超时 / 连接异常做重试与熔断
 import concurrent.futures  # 4 个垂直 Agent 并行执行，降低多步编排耗时
+from datetime import datetime, timedelta
 
 # ---- 让本模块能 import 到仓库根的 agent_ops 与 app/ 下的 rag_retriever ----
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -26,7 +28,7 @@ for _p in (_REPO_ROOT, _APP_DIR):
         sys.path.insert(0, _p)
 
 from agent_ops import Collector, record_step, trace, SQLiteStore  # noqa: E402
-from agent_ops.cost import MODEL_PRICE  # noqa: E402
+from agent_ops.cost import MODEL_PRICE, USD_TO_CNY  # noqa: E402
 from rag_retriever import retrieve, count as rag_count  # noqa: E402
 
 # 最近一次检索命中片段（供 UI 展示），模块级缓存。
@@ -40,6 +42,53 @@ DEFAULT_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 DB_PATH = os.path.join(_REPO_ROOT, "agent_ops.db")
 store = SQLiteStore(DB_PATH)
 collector = Collector(storage=store)
+
+# ---------------------------------------------------------------------------
+# 韧性层配置（Phase 1）：全部可通过环境变量覆盖，默认保守可用
+#   AGENTOPS_REQ_TIMEOUT_S    单次 LLM 调用超时（秒），默认 30，杜绝一次挂死卡 10 分钟
+#   AGENTOPS_MAX_RETRIES      指数退避重试次数（仅对限流/超时/5xx 等瞬态错误），默认 3
+#   AGENTOPS_BACKOFF_S        退避基数（秒），第 n 次重试等待 base * 2^n，默认 1.0
+#   DEEPSEEK_FALLBACK_MODEL   主模型重试耗尽后的兜底模型（未设则不降级，直接抛错）
+#   AGENTOPS_DAILY_QUOTA_CNY  每日成本配额（¥），调用前真实拦截；<=0 关闭。默认 50
+# ---------------------------------------------------------------------------
+_REQ_TIMEOUT = float(os.environ.get("AGENTOPS_REQ_TIMEOUT_S", "30"))
+_MAX_RETRIES = int(os.environ.get("AGENTOPS_MAX_RETRIES", "3"))
+_BASE_BACKOFF = float(os.environ.get("AGENTOPS_BACKOFF_S", "1.0"))
+_FALLBACK_MODEL = (os.environ.get("DEEPSEEK_FALLBACK_MODEL", "") or None)
+
+# 仅瞬态错误值得重试；404/鉴权失败等立即抛出，避免对 __invalid_model__ 死循环
+_RETRYABLE = (
+    openai.RateLimitError,
+    openai.APITimeoutError,
+    openai.APIConnectionError,
+    openai.InternalServerError,
+)
+
+
+class QuotaExceeded(RuntimeError):
+    """每日成本配额已耗尽，LLM 调用在入口被真实熔断拒绝。"""
+
+
+def _today_cost_cny() -> float:
+    """从 agent_ops.db 实时汇总今日（本地 00:00 起）真实成本（¥）。"""
+    today0 = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    return store.cost_since_usd(today0) * USD_TO_CNY
+
+
+def check_quota() -> None:
+    """调用前配额校验（Phase 1b）：今日真实成本超阈值则抛 QuotaExceeded。
+
+    阈值取自 env AGENTOPS_DAILY_QUOTA_CNY（默认 50¥）；<=0 视为关闭。
+    这是从「滑杆写 shared_state 的 UI 模拟」升级为「基于真实日成本的调用前拦截」。
+    """
+    limit = float(os.environ.get("AGENTOPS_DAILY_QUOTA_CNY", "50"))
+    if limit <= 0:
+        return
+    spent = _today_cost_cny()
+    if spent >= limit:
+        raise QuotaExceeded(
+            f"今日成本 ¥{spent:.4f} 已超出每日配额 ¥{limit}，调用被熔断拒绝。"
+        )
 
 
 def _timed(fn):
@@ -61,17 +110,46 @@ def _deepseek_chat(model: str, messages: list, temperature: float = 0.3,
             "环境变量 DEEPSEEK_API_KEY 未设置。请在 .env 中配置并重启服务。"
         )
 
-    client = OpenAI(base_url=OPENAI_BASE_URL, api_key=OPENAI_API_KEY)
-    resp = client.chat.completions.create(
-        model=model, messages=messages, temperature=temperature,
-        max_tokens=max_tokens,
-    )
-    usage = resp.usage
-    return (
-        resp.choices[0].message.content,
-        int(usage.prompt_tokens or 0),
-        int(usage.completion_tokens or 0),
-    )
+    # 调用前真实配额拦截（Phase 1b）
+    check_quota()
+
+    # 主模型 + 可选兜底模型；每个模型都走同一套超时/退避重试
+    models_to_try = [model]
+    if _FALLBACK_MODEL and _FALLBACK_MODEL != model:
+        models_to_try.append(_FALLBACK_MODEL)
+
+    last_err: Exception | None = None
+    for attempt in range(_MAX_RETRIES):
+        for m in models_to_try:
+            try:
+                client = OpenAI(
+                    base_url=OPENAI_BASE_URL,
+                    api_key=OPENAI_API_KEY,
+                    timeout=_REQ_TIMEOUT,
+                )
+                resp = client.chat.completions.create(
+                    model=m, messages=messages, temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                usage = resp.usage
+                return (
+                    resp.choices[0].message.content,
+                    int(usage.prompt_tokens or 0),
+                    int(usage.completion_tokens or 0),
+                )
+            except _RETRYABLE as e:
+                # 瞬态错误：记录后进入退避，下次重试（含兜底模型）
+                last_err = e
+                break
+            except openai.OpenAIError as e:
+                # 非瞬态（鉴权/404/参数）：立即上抛，不重试
+                raise
+        # 指数退避后进入下一轮尝试
+        if attempt < _MAX_RETRIES - 1:
+            time.sleep(_BASE_BACKOFF * (2 ** attempt))
+
+    # 重试耗尽仍失败：原样抛出最后一条瞬态错误
+    raise last_err or RuntimeError("未知 LLM 调用错误（重试耗尽）")
 
 
 def _retrieve_context(question: str, top_k: int = 3) -> tuple[str, list]:

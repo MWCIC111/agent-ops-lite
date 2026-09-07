@@ -314,7 +314,66 @@ agent-ops-lite/
 └─ README.md
 ```
 
+## 生产级加固（Phase 0 / 1）
+
+本 Demo 的机制层（多 Agent 编排 / 置信度融合 / 人工回写飞轮 / 全链路观测）已是真实实现；
+以下把"工程化封装"补齐，使其逼近企业级落地：
+
+### Phase 0 · 去模拟（真实数据驱动）
+
+面板默认读 `agent_ops.db`（`demo_data.load_traces()` 真实优先、空库才回退模拟）。
+部署态挂一个常驻播种即可让全站切到 🟢 真实数据模式：
+
+```bash
+# 每 5 分钟跑一批真实 DeepSeek + 华佗百科 RAG 调用，Trace 自动落库
+*/5 * * * * cd /path/to/agent-ops-lite && python scripts/seed_real_data.py >> seed.log 2>&1
+```
+
+### Phase 1 · 韧性层 / 配额拦截 / 健康检查
+
+- **调用层韧性**：所有 LLM 调用 funnel 到唯一 `_deepseek_chat`，统一加
+  超时（`AGENTOPS_REQ_TIMEOUT_S`，默认 30s）、指数退避重试（限流/超时/5xx）、
+  主模型耗尽后切 `DEEPSEEK_FALLBACK_MODEL`。
+- **真实配额拦截**：每次调用前 `check_quota()` 查 `agent_ops.db` 真实日成本，
+  超 `AGENTOPS_DAILY_QUOTA_CNY`（默认 50¥）即抛 `QuotaExceeded` 拒绝——
+  从「滑杆写 shared_state 的 UI 模拟」升级为「调用前真实拦截」。
+- **健康检查**：`python scripts/healthz.py --port 8080`，`/healthz` 返回
+  DB 可达性 / Trace 新鲜度 / API Key 配置，供 K8s 探针或监控拨测。
+- **真实告警**：`python scripts/alert_check.py` 读 `report()` 聚合指标，
+  错误率 / 成本超阈值时向 `AGENTOPS_WEBHOOK_URL` 真实推送（与 seed 同节奏挂 cron）。
+
+### 环境变量
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `DEEPSEEK_API_KEY` | — | DeepSeek OpenAI 兼容密钥（必填） |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | 兼容端点 |
+| `DEEPSEEK_MODEL` | `deepseek-chat` | 主模型 |
+| `DEEPSEEK_FALLBACK_MODEL` | 空（不降级） | 主模型重试耗尽后的兜底模型 |
+| `AGENTOPS_REQ_TIMEOUT_S` | `30` | 单次 LLM 调用超时（秒） |
+| `AGENTOPS_MAX_RETRIES` | `3` | 指数退避重试次数 |
+| `AGENTOPS_BACKOFF_S` | `1.0` | 退避基数（秒） |
+| `AGENTOPS_DAILY_QUOTA_CNY` | `50` | 每日成本配额（¥），`<=0` 关闭拦截 |
+| `AGENTOPS_WEBHOOK_URL` | 空（仅打印） | 告警机器人地址（企业微信 / 飞书） |
+| `AGENTOPS_WEBHOOK_TYPE` | `wecom` | `wecom` / `feishu` |
+
 ## Roadmap
+
+- [x] Live Demo：8 页面完整面板（模拟数据 · Live 实时模式）
+- [x] `agent_ops` 核心库：装饰器采集真实 Trace（77 项测试通过，数据与面板打通）
+- [x] 多框架适配：LangGraph 真实示例（3 节点图，失败自动标记）
+- [x] 父子 span：工具内部嵌套分层 + 按模型归因（`model_usage` / `by_model`）
+- [x] 存储后端：SQLite 持久化（零依赖，接口可换 Elasticsearch）
+- [x] 告警通知：企业微信 / 飞书 Webhook（阈值规则自动推送）
+- [x] 单元测试与 CI（GitHub Actions 自动验证，双 Python 版本矩阵）
+- [x] Agent Skill：`agentops-observe`（SKILL.md + 触发词 + 闭环演示脚本）
+- [x] MCP Server：`agent_ops.mcp_server`（零依赖手写 stdio 协议，Claude Desktop / Cursor 可直连）
+- [x] 生产级加固 Phase 0：真实数据播种（cron 持续落库，全站 mode=real）
+- [x] 生产级加固 Phase 1：调用层韧性（超时/重试/fallback）+ 真实配额拦截 + 健康检查 + 告警 cron
+- [ ] 多框架适配：Dify / 自研 Agent
+- [ ] 服务化（FastAPI + 独立 worker + Redis）与权限感知 RAG / 审计留痕（Phase 2/3）
+
+## License
 
 - [x] Live Demo：8 页面完整面板（模拟数据 · Live 实时模式）
 - [x] `agent_ops` 核心库：装饰器采集真实 Trace（77 项测试通过，数据与面板打通）

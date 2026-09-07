@@ -417,6 +417,40 @@ def main() -> None:
           f"agent_ops={fields(Trace)} demo={fields(DemoTrace)}")
     check("模型单价与面板一致", MODEL_PRICE == DEMO_PRICE)
 
+    # ---------- 7. 韧性层新增：storage 真实日成本 / 最新 Trace 时间（零依赖）----------
+    print("== 韧性层：storage 真实成本查询 ==")
+    import tempfile as _tf
+    from datetime import datetime as _dt, timedelta as _td
+    _tdb = SQLiteStore(os.path.join(_tf.gettempdir(), "agentops_test_resil.db"))
+    _tdb.clear()
+    _c = Collector(storage=_tdb)
+    _now = _dt.now()
+    _c.add(Trace(trace_id="r1", agent="通用问答", started_at=_now, cost_usd=0.02))
+    _c.add(Trace(trace_id="r2", agent="知源", started_at=_now - _td(days=6), cost_usd=0.80))
+    _today0 = _now.replace(hour=0, minute=0, second=0, microsecond=0)
+    check("cost_since_usd 全量=0.82", abs(_tdb.cost_since_usd(_dt(2000, 1, 1)) - 0.82) < 1e-9)
+    check("cost_since_usd 仅今日=0.02", abs(_tdb.cost_since_usd(_today0) - 0.02) < 1e-9)
+    check("latest_started_at 返回最新", _tdb.latest_started_at() is not None and
+          (_now - _tdb.latest_started_at()).total_seconds() < 5)
+    _empty = SQLiteStore(os.path.join(_tf.gettempdir(), "agentops_test_empty.db"))
+    check("空库 latest_started_at=None", _empty.latest_started_at() is None)
+    check("空库 cost_since_usd=0", _empty.cost_since_usd(_dt(2000, 1, 1)) == 0.0)
+
+    # healthz.build_report 零依赖验证（读取仓库根 agent_ops.db，无则建空库）
+    print("== 韧性层：healthz 健康检查 ==")
+    import importlib.util as _ilu
+    _hz_spec = _ilu.spec_from_file_location(
+        "healthz_mod",
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "scripts", "healthz.py"),
+    )
+    _hz = _ilu.module_from_spec(_hz_spec)
+    _hz_spec.loader.exec_module(_hz)
+    _rep = _hz.build_report(freshness_min=30)
+    check("healthz 返回 db_reachable", _rep.get("db_reachable") is True)
+    check("healthz 状态合法", _rep.get("status") in ("ok", "degraded", "error"))
+    check("healthz 含 trace_count 字段", "trace_count" in _rep)
+
     print(f"\n结果: {PASS} 通过 / {FAIL} 失败")
     sys.exit(1 if FAIL else 0)
 

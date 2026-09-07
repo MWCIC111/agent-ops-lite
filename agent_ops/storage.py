@@ -219,3 +219,34 @@ class SQLiteStore:
             finally:
                 conn.close()
         return int(row[0])
+
+    def cost_since_usd(self, since: datetime) -> float:
+        """自 since（本地时间）起所有 Trace 的真实成本合计（美元）。
+
+        用于调用前配额校验 / 成本核算页实时汇总。started_at 以 ISO 字符串存储，
+        同格式同精度下字典序比较等价于时间比较。
+        """
+        with self._lock:
+            conn = sqlite3.connect(self._db_path)
+            try:
+                row = conn.execute(
+                    "SELECT COALESCE(SUM(cost_usd), 0) FROM traces WHERE started_at >= ?",
+                    (_dt_to_iso(since),),
+                ).fetchone()
+            finally:
+                conn.close()
+        return float(row[0])
+
+    def latest_started_at(self) -> datetime | None:
+        """最近一条 Trace 的 started_at；库空返回 None。"""
+        with self._lock:
+            conn = sqlite3.connect(self._db_path)
+            try:
+                row = conn.execute(
+                    "SELECT started_at FROM traces ORDER BY started_at DESC LIMIT 1"
+                ).fetchone()
+            finally:
+                conn.close()
+        if not row:
+            return None
+        return _iso_to_dt(row[0])
