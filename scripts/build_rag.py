@@ -15,8 +15,11 @@ import re
 import random
 from jieba import lcut
 
-CACHE_FILE = (r"C:/Users/21561/.cache/modelscope/hub/datasets/downloads/"
-              r"45e1c912258b5263e6d1647202e7a04abda91970b25cfcda43b9ace6130d1547")
+CACHE_FILE = os.environ.get(
+    "AGENTOPS_RAG_CACHE",
+    os.path.join(os.path.expanduser("~"), ".cache", "modelscope", "hub", "datasets", "downloads",
+                 "45e1c912258b5263e6d1647202e7a04abda91970b25cfcda43b9ace6130d1547"),
+)
 OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "rag_data")
 DOCS_PATH = os.path.join(OUT_DIR, "docs.jsonl")
 

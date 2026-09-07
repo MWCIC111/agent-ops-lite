@@ -3,29 +3,7 @@
 **Agent 可观测与成本管控轻量工具** —— 采集 Agent 调用日志，聚合为可读指标，支撑从 Demo 到生产的运维闭环。
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-
-(base) PS D:\repos> cd D:\repos\agent-ops-lite  
-(base) PS D:\repos\agent-ops-lite> Copy-Item "C:\Users\21561\WorkBuddy\2026-09-07-22-37-28\agent-ops-lite-README-修订版.md" "README.md" -Force  
-(base) PS D:\repos\agent-ops-lite> git diff --stat  
-warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it  
-README.md | 78 ++++++++++++++++++++++++++++++++++++++++++++++++++++++---------  
-1 file changed, 67 insertions(+), 11 deletions(-)  
-(base) PS D:\repos\agent-ops-lite> git add README.md  
-warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it  
-(base) PS D:\repos\agent-ops-lite> git commit -m "docs: 同步页面数 11+首页、测试 85、真实优先说明"  
-[main d12ba28] docs: 同步页面数 11+首页、测试 85、真实优先说明  
-1 file changed, 67 insertions(+), 11 deletions(-)  
-(base) PS D:\repos\agent-ops-lite> git push  
-To github.com:MWCIC111/agent-ops-lite.git  
-! [rejected]        main -> main (fetch first)  
-error: failed to push some refs to 'github.com:MWCIC111/agent-ops-lite.git'  
-hint: Updates were rejected because the remote contains work that you do not  
-hint: have locally. This is usually caused by another repository pushing to  
-hint: the same ref. If you want to integrate the remote changes, use  
-hint: 'git pull' before pushing again.  
-hint: See the 'Note about fast-forwards' in 'git push --help' for details.  
-(base) PS D:\repos\agent-ops-lite>
-
+[![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)]()
 ![CI](https://github.com/MWCIC111/agent-ops-lite/actions/workflows/test.yml/badge.svg)
 
 > 🚀 **在线 Demo**：常驻实例 <http://82.156.184.242:8501>（已验证在线）；云端备份 [agent-ops-lite.streamlit.app](https://agent-ops-lite.streamlit.app/)（闲置会自动休眠）。
