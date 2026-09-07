@@ -2,11 +2,33 @@
 
 **Agent 可观测与成本管控轻量工具** —— 采集 Agent 调用日志，聚合为可读指标，支撑从 Demo 到生产的运维闭环。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)]()
-[![CI](https://github.com/MWCIC111/agent-ops-lite/actions/workflows/test.yml/badge.svg)](https://github.com/MWCIC111/agent-ops-lite/actions/workflows/test.yml)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-> 🚀 **在线 Demo**：[agent-ops-lite.streamlit.app](https://agent-ops-lite.streamlit.app/)
+(base) PS D:\repos> cd D:\repos\agent-ops-lite  
+(base) PS D:\repos\agent-ops-lite> Copy-Item "C:\Users\21561\WorkBuddy\2026-09-07-22-37-28\agent-ops-lite-README-修订版.md" "README.md" -Force  
+(base) PS D:\repos\agent-ops-lite> git diff --stat  
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it  
+README.md | 78 ++++++++++++++++++++++++++++++++++++++++++++++++++++++---------  
+1 file changed, 67 insertions(+), 11 deletions(-)  
+(base) PS D:\repos\agent-ops-lite> git add README.md  
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it  
+(base) PS D:\repos\agent-ops-lite> git commit -m "docs: 同步页面数 11+首页、测试 85、真实优先说明"  
+[main d12ba28] docs: 同步页面数 11+首页、测试 85、真实优先说明  
+1 file changed, 67 insertions(+), 11 deletions(-)  
+(base) PS D:\repos\agent-ops-lite> git push  
+To github.com:MWCIC111/agent-ops-lite.git  
+! [rejected]        main -> main (fetch first)  
+error: failed to push some refs to 'github.com:MWCIC111/agent-ops-lite.git'  
+hint: Updates were rejected because the remote contains work that you do not  
+hint: have locally. This is usually caused by another repository pushing to  
+hint: the same ref. If you want to integrate the remote changes, use  
+hint: 'git pull' before pushing again.  
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.  
+(base) PS D:\repos\agent-ops-lite>
+
+![CI](https://github.com/MWCIC111/agent-ops-lite/actions/workflows/test.yml/badge.svg)
+
+> 🚀 **在线 Demo**：常驻实例 <http://82.156.184.242:8501>（已验证在线）；云端备份 [agent-ops-lite.streamlit.app](https://agent-ops-lite.streamlit.app/)（闲置会自动休眠）。
 
 ---
 
@@ -26,7 +48,7 @@ agent-ops-lite 用最轻的方式解决这些问题：**接入一个装饰器，
 - **全链路 Trace**：一次调用内的每个步骤（意图 / 规划 / 检索 / 工具 / 生成）自动串联，失败步骤高亮，重试可见
 - **多维指标**：调用量、延迟、Token、成功率，按 Agent / 按工具 / 按天聚合
 - **成本核算**：按模型单价自动折算成本，支持多模型计价
-- **配额熔断**：每日成本配额，超限自动拒绝低优先级调用（Demo 中可交互体验）
+- **配额熔断**：每日成本配额，超限自动拒绝低优先级调用（Demo 中可交互体验；部署态升级为真实拦截）
 - **告警规则**：错误率阈值触发告警，慢调用 Top N 自动列出；**Webhook 告警**（企业微信 / 飞书机器人）超阈值自动推送
 - **持久化存储**：内置 SQLite 存储后端（零依赖），重启不丢、历史可查；存储接口可替换为 Elasticsearch / ClickHouse
 - **跨页联动**：拓扑异常 / 配额熔断 / 发布结论 / 灰度进度全局共享——任一页面操作，全系统同步感知（模拟真实生产"所有面板读同一后端"）
@@ -60,13 +82,13 @@ python skills/agentops-observe/scripts/observe_agent.py
 
 ### 暴露的工具
 
-| 工具 | 作用 |
-|---|---|
-| `report` | 生成聚合报告（总调用 / 成功率 / 错误率 / 成本 / 按 Agent 按模型分组） |
-| `model_usage` | 按模型归因用量统计（成本降序，含父子 span 归因） |
-| `traces` | 列出最近 Trace（展平成行，与面板表格字段一致） |
-| `history` | 查询 SQLite 持久化的历史 Trace（含嵌套步骤树） |
-| `check_alerts` | 检查告警规则是否触发（错误率 / 成本超阈值，只检查不发送） |
+| 工具             | 作用                                           |
+| -------------- | -------------------------------------------- |
+| `report`       | 生成聚合报告（总调用 / 成功率 / 错误率 / 成本 / 按 Agent 按模型分组） |
+| `model_usage`  | 按模型归因用量统计（成本降序，含父子 span 归因）                  |
+| `traces`       | 列出最近 Trace（展平成行，与面板表格字段一致）                   |
+| `history`      | 查询 SQLite 持久化的历史 Trace（含嵌套步骤树）               |
+| `check_alerts` | 检查告警规则是否触发（错误率 / 成本超阈值，只检查不发送）               |
 
 ### 本地试跑（stdio 模式）
 
@@ -106,7 +128,7 @@ streamlit run Home.py
 
 浏览器打开 `http://localhost:8501`，即可查看完整面板。
 
-> Demo 使用 2000 条模拟数据（固定随机种子，可复现），**数据结构与真实采集完全一致**——接入真实数据源即可用于生产。
+> Demo 默认使用 2000 条模拟数据（固定随机种子，可复现），**数据结构与真实采集完全一致**——接入真实数据源即可用于生产。默认空库运行于 🟡 模拟模式；前往「真实 Agent」或「数据管理」页一键播种真实数据即切 🟢 真实模式（Trace 自动落库 SQLite，详见下方「生产级加固」）。
 
 ### 核心库：3 行接入任意 Agent
 
@@ -227,21 +249,27 @@ flowchart LR
 3. 「版本对比」出 A/B 结论 → 一键带入「灰度发布」→ 暂缓发布时放量按钮被禁用
 4. 「成本核算」配额拖低 → 触发熔断 → 首页横幅提示"成本配额熔断"
 
-> 设计理念：真实生产中所有面板读同一个后端（Prometheus / ES / Redis），
+> 设计理念：真实生产中所有面板读同一个后端（Prometheus / ES / Redis），  
 > 本 Demo 用 `shared_state.py` 模拟这个共享后端，实现全系统状态互通。
 
 ## 页面导览
 
-| 页面 | 功能 | 解决的问题 |
-| --- | --- | --- |
-| **总览 Dashboard** | 调用量 / Token / 成本 / 延迟 + 趋势图，支持 **Live 每秒实时刷新** | 一屏看全系统健康度 |
-| **链路追踪** | Trace ID 搜索，步骤级展开明细 | 异常定位从小时级缩短到分钟级 |
-| **工具分析** | 工具调用量 / 成功率 / 平均耗时 | 一眼找出拖垮整体的工具 |
-| **成本核算** | 按 Agent / 按天拆解成本 + 配额熔断 | 成本不再是一笔糊涂账 |
-| **告警与异常** | 慢调用 Top10 + 错误率阈值线 | 生产化告警闭环 |
-| **版本对比** | A/B 测试：成功率 / 延迟 / 成本对比 + 发布结论 | 用数据决定是否全量发布 |
-| **灰度发布** | 10% → 50% → 100% 渐进放量 + 异常自动回滚 | 发布不是一把梭，分阶段可控 |
-| **Agent 拓扑** | Agent 间调用关系网络图，可模拟任一 Agent 异常并联动明细 | 看清谁在调用谁，异常 Agent 一眼定位 |
+> 共 **11 个功能页面 + 总览首页**（总览 Dashboard 为 `Home.py`，其余为 `app/pages/` 下 1~11 编号页面）。默认空库为 🟡 模拟模式，前往「真实 Agent」/「数据管理」一键播种真实数据即切 🟢 真实模式。
+
+| 页面               | 功能                                                | 解决的问题                 |
+| ---------------- | ------------------------------------------------- | --------------------- |
+| **总览 Dashboard** | 调用量 / Token / 成本 / 延迟 + 趋势图，支持 **Live 每秒实时刷新**    | 一屏看全系统健康度             |
+| **链路追踪**         | Trace ID 搜索，步骤级展开明细                               | 异常定位从小时级缩短到分钟级        |
+| **工具分析**         | 工具调用量 / 成功率 / 平均耗时                                | 一眼找出拖垮整体的工具           |
+| **成本核算**         | 按 Agent / 按天拆解成本 + 配额熔断                           | 成本不再是一笔糊涂账            |
+| **告警与异常**        | 慢调用 Top10 + 错误率阈值线                                | 生产化告警闭环               |
+| **版本对比**         | A/B 测试：成功率 / 延迟 / 成本对比 + 发布结论                     | 用数据决定是否全量发布           |
+| **灰度发布**         | 10% → 50% → 100% 渐进放量 + 异常自动回滚                    | 发布不是一把梭，分阶段可控         |
+| **Agent 拓扑**     | Agent 间调用关系网络图，可模拟任一 Agent 异常并联动明细                | 看清谁在调用谁，异常 Agent 一眼定位 |
+| **真实 Agent 调用**  | 真实 DeepSeek + 华佗百科 RAG 调用，Trace 自动落库（真实优先，空库回退模拟） | 验证真实 LLM 链路可观测        |
+| **数据管理**         | 一键播种真实数据 / 清空 / 导出，切换 🟢真实·🟡模拟模式                 | 真实数据驱动闭环              |
+| **操作日志**         | 访问 / 运行 / 播种 / 清空全程时间戳留痕（审计时间线）                   | 操作可审计、可追溯             |
+| **人工审核回写**       | 低置信度转人工 → 审核回写 → 复问采信（置信度飞轮）                      | 闭环可信增强                |
 
 ## 架构
 
@@ -267,19 +295,20 @@ flowchart LR
 
 ## 技术栈
 
-| 层 | 选型 | 理由 |
-| --- | --- | --- |
-| 面板 | Streamlit + Plotly | 纯 Python，几十行出一个页面，交互图表原生支持 |
-| 数据处理 | pandas | 聚合计算，生态成熟 |
-| 核心库 | 纯标准库 + dataclass + typing | 零依赖、可嵌入任何框架 |
-| 部署 | Streamlit Cloud | 免费托管，`requirements.txt` 提交即部署 |
+| 层    | 选型                               | 理由                                 |
+| ---- | -------------------------------- | ---------------------------------- |
+| 面板   | Streamlit + Plotly               | 纯 Python，几十行出一个页面，交互图表原生支持         |
+| 数据处理 | pandas                           | 聚合计算，生态成熟                          |
+| 核心库  | 纯标准库 + dataclass + typing        | 零依赖、可嵌入任何框架                        |
+| 部署   | Streamlit Cloud / 腾讯云 Lighthouse | 免费托管或常驻实例，`requirements.txt` 提交即部署 |
+
 
 ## 目录结构
 
 ```
 agent-ops-lite/
 ├─ app/                    # Live Demo（独立可跑）
-│  ├─ Home.py              # 总览 Dashboard（含系统状态横幅）
+│  ├─ Home.py              # 总览 Dashboard（含系统状态横幅 + 实时时钟）
 │  ├─ shared_state.py      # 全局共享状态（跨页联动核心，模拟共享后端）
 │  ├─ demo_data.py         # 模拟数据生成器（2000 条 Trace，可复现）
 │  ├─ requirements.txt
@@ -290,13 +319,17 @@ agent-ops-lite/
 │     ├─ 4_告警与异常.py
 │     ├─ 5_版本对比.py
 │     ├─ 6_灰度发布.py
-│     └─ 7_Agent拓扑.py
+│     ├─ 7_Agent拓扑.py
+│     ├─ 8_真实Agent.py
+│     ├─ 9_数据管理.py
+│     ├─ 10_操作日志.py
+│     └─ 11_人工审核回写.py
 ├─ examples/               # 接入示例（3 行接入 + LangGraph + MCP client）
 │  ├─ quickstart.py        # 3 行接入普通函数（含失败场景）
 │  ├─ langgraph_example.py # LangGraph 3 节点线性图接入（检索→生成→校验）
 │  ├─ multi_agent_example.py # LangGraph 多 Agent 协作（Orchestrator + 4 垂直 Agent + 条件路由）
 │  ├─ mcp_client_demo.py   # 最小 MCP client（纯标准库，连 mcp_server 跑通握手+全工具）
-│  └─ requirements.txt     # examples 依赖（langgraph），核心库不受影响
+│  └─ requirements.txt      # examples 依赖（langgraph），核心库不受影响
 ├─ skills/                 # Agent Skill：让 Agent 学会用本库（SKILL.md + 脚本）
 │  └─ agentops-observe/    # 给任意 Agent 加可观测性（触发词 / 三步接入 / 闭环演示）
 │     ├─ SKILL.md
@@ -309,19 +342,19 @@ agent-ops-lite/
 │  ├─ storage.py           # 持久化存储：SQLiteStore / MemoryStore（协议可换 ES）
 │  ├─ alerts.py            # 告警：WebhookAlert（企业微信 / 飞书，阈值规则）
 │  └─ mcp_server.py        # MCP Server：零依赖手写 stdio 协议，5 个工具供 AI 客户端连接
-├─ tests/                  # 核心库测试（77 项断言，含 MCP 协议 + 数据兼容性）
+├─ tests/                  # 核心库测试（85 项断言，含 MCP 协议 + 数据兼容性 + 韧性层回归）
 │  └─ test_core.py
 └─ README.md
 ```
 
 ## 生产级加固（Phase 0 / 1）
 
-本 Demo 的机制层（多 Agent 编排 / 置信度融合 / 人工回写飞轮 / 全链路观测）已是真实实现；
+本 Demo 的机制层（多 Agent 编排 / 置信度融合 / 人工回写飞轮 / 全链路观测）已是真实实现；  
 以下把"工程化封装"补齐，使其逼近企业级落地：
 
 ### Phase 0 · 去模拟（真实数据驱动）
 
-面板默认读 `agent_ops.db`（`demo_data.load_traces()` 真实优先、空库才回退模拟）。
+面板默认读 `agent_ops.db`（`demo_data.load_traces()` 真实优先、空库才回退模拟）。  
 部署态挂一个常驻播种即可让全站切到 🟢 真实数据模式：
 
 ```bash
@@ -331,60 +364,47 @@ agent-ops-lite/
 
 ### Phase 1 · 韧性层 / 配额拦截 / 健康检查
 
-- **调用层韧性**：所有 LLM 调用 funnel 到唯一 `_deepseek_chat`，统一加
-  超时（`AGENTOPS_REQ_TIMEOUT_S`，默认 30s）、指数退避重试（限流/超时/5xx）、
+- **调用层韧性**：所有 LLM 调用 funnel 到唯一 `_deepseek_chat`，统一加  
+  超时（`AGENTOPS_REQ_TIMEOUT_S`，默认 30s）、指数退避重试（限流/超时/5xx）、  
   主模型耗尽后切 `DEEPSEEK_FALLBACK_MODEL`。
-- **真实配额拦截**：每次调用前 `check_quota()` 查 `agent_ops.db` 真实日成本，
-  超 `AGENTOPS_DAILY_QUOTA_CNY`（默认 50¥）即抛 `QuotaExceeded` 拒绝——
+- **真实配额拦截**：每次调用前 `check_quota()` 查 `agent_ops.db` 真实日成本，  
+  超 `AGENTOPS_DAILY_QUOTA_CNY`（默认 50¥）即抛 `QuotaExceeded` 拒绝——  
   从「滑杆写 shared_state 的 UI 模拟」升级为「调用前真实拦截」。
-- **健康检查**：`python scripts/healthz.py --port 8080`，`/healthz` 返回
+- **健康检查**：`python scripts/healthz.py --port 8080`，`/healthz` 返回  
   DB 可达性 / Trace 新鲜度 / API Key 配置，供 K8s 探针或监控拨测。
-- **真实告警**：`python scripts/alert_check.py` 读 `report()` 聚合指标，
+- **真实告警**：`python scripts/alert_check.py` 读 `report()` 聚合指标，  
   错误率 / 成本超阈值时向 `AGENTOPS_WEBHOOK_URL` 真实推送（与 seed 同节奏挂 cron）。
 
 ### 环境变量
 
-| 变量 | 默认 | 说明 |
-|---|---|---|
-| `DEEPSEEK_API_KEY` | — | DeepSeek OpenAI 兼容密钥（必填） |
-| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | 兼容端点 |
-| `DEEPSEEK_MODEL` | `deepseek-chat` | 主模型 |
-| `DEEPSEEK_FALLBACK_MODEL` | 空（不降级） | 主模型重试耗尽后的兜底模型 |
-| `AGENTOPS_REQ_TIMEOUT_S` | `30` | 单次 LLM 调用超时（秒） |
-| `AGENTOPS_MAX_RETRIES` | `3` | 指数退避重试次数 |
-| `AGENTOPS_BACKOFF_S` | `1.0` | 退避基数（秒） |
-| `AGENTOPS_DAILY_QUOTA_CNY` | `50` | 每日成本配额（¥），`<=0` 关闭拦截 |
-| `AGENTOPS_WEBHOOK_URL` | 空（仅打印） | 告警机器人地址（企业微信 / 飞书） |
-| `AGENTOPS_WEBHOOK_TYPE` | `wecom` | `wecom` / `feishu` |
+| 变量                         | 默认                            | 说明                       |
+| -------------------------- | ----------------------------- | ------------------------ |
+| `DEEPSEEK_API_KEY`         | —                             | DeepSeek OpenAI 兼容密钥（必填） |
+| `DEEPSEEK_BASE_URL`        | `https://api.deepseek.com/v1` | 兼容端点                     |
+| `DEEPSEEK_MODEL`           | `deepseek-chat`               | 主模型                      |
+| `DEEPSEEK_FALLBACK_MODEL`  | 空（不降级）                        | 主模型重试耗尽后的兜底模型            |
+| `AGENTOPS_REQ_TIMEOUT_S`   | `30`                          | 单次 LLM 调用超时（秒）           |
+| `AGENTOPS_MAX_RETRIES`     | `3`                           | 指数退避重试次数                 |
+| `AGENTOPS_BACKOFF_S`       | `1.0`                         | 退避基数（秒）                  |
+| `AGENTOPS_DAILY_QUOTA_CNY` | `50`                          | 每日成本配额（¥），`<=0` 关闭拦截     |
+| `AGENTOPS_WEBHOOK_URL`     | 空（仅打印）                        | 告警机器人地址（企业微信 / 飞书）       |
+| `AGENTOPS_WEBHOOK_TYPE`    | `wecom`                       | `wecom` / `feishu`       |
 
 ## Roadmap
 
-- [x] Live Demo：8 页面完整面板（模拟数据 · Live 实时模式）
-- [x] `agent_ops` 核心库：装饰器采集真实 Trace（77 项测试通过，数据与面板打通）
+- [x] Live Demo：11 页面完整面板（总览 + 11 功能页，真实优先 · 缺数据自动回退可复现模拟）
+- [x] `agent_ops` 核心库：装饰器采集真实 Trace（85 项测试通过，数据与面板打通）
 - [x] 多框架适配：LangGraph 真实示例（3 节点图，失败自动标记）
 - [x] 父子 span：工具内部嵌套分层 + 按模型归因（`model_usage` / `by_model`）
 - [x] 存储后端：SQLite 持久化（零依赖，接口可换 Elasticsearch）
 - [x] 告警通知：企业微信 / 飞书 Webhook（阈值规则自动推送）
-- [x] 单元测试与 CI（GitHub Actions 自动验证，双 Python 版本矩阵）
+- [x] 单元测试与 CI（GitHub Actions 自动验证 85 项，双 Python 版本矩阵）
 - [x] Agent Skill：`agentops-observe`（SKILL.md + 触发词 + 闭环演示脚本）
 - [x] MCP Server：`agent_ops.mcp_server`（零依赖手写 stdio 协议，Claude Desktop / Cursor 可直连）
 - [x] 生产级加固 Phase 0：真实数据播种（cron 持续落库，全站 mode=real）
 - [x] 生产级加固 Phase 1：调用层韧性（超时/重试/fallback）+ 真实配额拦截 + 健康检查 + 告警 cron
 - [ ] 多框架适配：Dify / 自研 Agent
 - [ ] 服务化（FastAPI + 独立 worker + Redis）与权限感知 RAG / 审计留痕（Phase 2/3）
-
-## License
-
-- [x] Live Demo：8 页面完整面板（模拟数据 · Live 实时模式）
-- [x] `agent_ops` 核心库：装饰器采集真实 Trace（77 项测试通过，数据与面板打通）
-- [x] 多框架适配：LangGraph 真实示例（3 节点图，失败自动标记）
-- [x] 父子 span：工具内部嵌套分层 + 按模型归因（`model_usage` / `by_model`）
-- [x] 存储后端：SQLite 持久化（零依赖，接口可换 Elasticsearch）
-- [x] 告警通知：企业微信 / 飞书 Webhook（阈值规则自动推送）
-- [x] 单元测试与 CI（GitHub Actions 自动验证，双 Python 版本矩阵）
-- [x] Agent Skill：`agentops-observe`（SKILL.md + 触发词 + 闭环演示脚本）
-- [x] MCP Server：`agent_ops.mcp_server`（零依赖手写 stdio 协议，Claude Desktop / Cursor 可直连）
-- [ ] 多框架适配：Dify / 自研 Agent
 
 ## License
 
