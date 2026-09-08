@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)]()
 ![CI](https://github.com/MWCIC111/agent-ops-lite/actions/workflows/test.yml/badge.svg)
 
-> 🚀 **在线 Demo**：常驻实例 <http://82.156.184.242:8501>（已验证在线）；云端备份 [agent-ops-lite.streamlit.app](https://agent-ops-lite.streamlit.app/)（闲置会自动休眠）。
+> 🚀 **在线 Demo**：常驻实例 <http://82.156.184.242:8501>；云端备份 [agent-ops-lite.streamlit.app](https://agent-ops-lite.streamlit.app/)（闲置会自动休眠）。
 
 ---
 
