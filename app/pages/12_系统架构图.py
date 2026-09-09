@@ -20,11 +20,20 @@ page_visit("系统架构图")
 st.caption("Orchestrator 集中式编排 + 置信度门控 + 全链路 Trace + 人工审核回写 + 最终交付。"
            "右上角预设默认为 CLASSIC（实线可见）；可现场切 SIGNAL FLOW 看动态 trace，但截图请回 CLASSIC。")
 
-ASSET_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app", "assets")
-HTML_PATH = os.path.join(ASSET_DIR, "research-butler-architecture.html")
+# 多候选路径：避免依赖 __file__ 单点解析，兼容本地开发与服务器 systemd 模式。
+CANDIDATES = [
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "research-butler-architecture.html"),
+    os.path.join(os.getcwd(), "assets", "research-butler-architecture.html"),
+    os.path.join(os.getcwd(), "app", "assets", "research-butler-architecture.html"),
+    "/home/ubuntu/agent-ops-lite/app/assets/research-butler-architecture.html",
+]
+HTML_PATH = next((p for p in CANDIDATES if os.path.exists(p)), None)
 
-if not os.path.exists(HTML_PATH):
-    st.error(f"未找到架构图资产：{HTML_PATH}（请确认 app/assets/research-butler-architecture.html 已随仓库部署）")
+if HTML_PATH is None:
+    st.error(
+        "未找到架构图资产。请确认 app/assets/research-butler-architecture.html 已随仓库部署。\n\n"
+        f"已尝试路径：\n- " + "\n- ".join(CANDIDATES)
+    )
     st.stop()
 
 with open(HTML_PATH, encoding="utf-8") as f:
