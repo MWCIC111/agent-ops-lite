@@ -312,7 +312,9 @@ agent-ops-lite/
 │     ├─ 8_真实Agent.py
 │     ├─ 9_数据管理.py
 │     ├─ 10_操作日志.py
-│     └─ 11_人工审核回写.py
+│     ├─ 11_人工审核回写.py
+│     └─ 12_系统架构图.py    # archify 架构图嵌入页（SVG/HTML 资产在 app/assets/）
+│  ├─ assets/                 # 静态资产（archify 生成的架构图：.svg / .html / .json 同目录）
 ├─ examples/               # 接入示例（3 行接入 + LangGraph + MCP client）
 │  ├─ quickstart.py        # 3 行接入普通函数（含失败场景）
 │  ├─ langgraph_example.py # LangGraph 3 节点线性图接入（检索→生成→校验）
@@ -381,7 +383,7 @@ agent-ops-lite/
 
 ## Roadmap
 
-- [x] Live Demo：11 页面完整面板（总览 + 11 功能页，真实优先 · 缺数据自动回退可复现模拟）
+- [x] Live Demo：12 页面完整面板（总览 + 12 功能页，真实优先 · 缺数据自动回退可复现模拟）
 - [x] `agent_ops` 核心库：装饰器采集真实 Trace（85 项测试通过，数据与面板打通）
 - [x] 多框架适配：LangGraph 真实示例（3 节点图，失败自动标记）
 - [x] 父子 span：工具内部嵌套分层 + 按模型归因（`model_usage` / `by_model`）
