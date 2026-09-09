@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "项目五 研发管家",
+    "subtitle": "LangGraph 集中式多 Agent · 自研工具抽象层 · 置信度门控 · 三层幻觉抑制 · 数据飞轮 · 全链路 Trace · 诺唯赞",
+    "output": "research-butler-architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1380, 800]
+  },
+  "components": [
+    { "id": "user", "type": "external", "label": "R&D 用户", "sublabel": "研发科学家", "pos": [60, 70], "size": [150, 70] },
+    { "id": "streamlit", "type": "frontend", "label": "Streamlit UI", "sublabel": "对话 + 审核面板", "pos": [300, 70], "size": [200, 70] },
+    { "id": "orchestrator", "type": "backend", "label": "LangGraph Orchestrator", "sublabel": "4 垂直 Agent + 共享 State", "pos": [560, 230], "size": [360, 130], "tag": "中央调度 · 集中式多 Agent" },
+    { "id": "observability", "type": "database", "label": "全链路 Trace · 记忆", "sublabel": "agent-ops-lite 审计 + 上下文", "pos": [1010, 90], "size": [300, 90] },
+    { "id": "tool-layer", "type": "backend", "label": "自研工具抽象层", "sublabel": "Local Python + HTTP + JSON Schema", "pos": [80, 460], "size": [280, 110], "tag": "非 MCP 协议" },
+    { "id": "confidence", "type": "backend", "label": "置信度融合", "sublabel": "Milvus 相似度 + LLM logprob + 业务规则", "pos": [470, 460], "size": [320, 110], "tag": "三层幻觉抑制前置" },
+    { "id": "gate", "type": "backend", "label": "置信度门控", "sublabel": "高置信回流 · 低置信转人工 · 拒绝阻断", "pos": [840, 460], "size": [300, 110] },
+    { "id": "block", "type": "security", "label": "拒绝 · 阻断", "sublabel": "高危 / 越权操作拦截", "pos": [1220, 590], "size": [140, 110] },
+    { "id": "vllm", "type": "cloud", "label": "vLLM 推理", "sublabel": "2×3090 生产 · Qwen-7B", "pos": [80, 650], "size": [280, 70] },
+    { "id": "human-review", "type": "security", "label": "人工审核 · 数据飞轮", "sublabel": "低置信度触发 → 审核回写 Milvus", "pos": [470, 650], "size": [360, 70] },
+    { "id": "milvus", "type": "database", "label": "Milvus 向量库", "sublabel": "检索 + 命中回写", "pos": [900, 650], "size": [300, 70] },
+    { "id": "delivery", "type": "frontend", "label": "研发交付物", "sublabel": "结构化报告 / 研发结论 → 用户", "pos": [1010, 210], "size": [280, 100], "tag": "系统最终输出" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "质量保障 + 推理底座", "wraps": ["tool-layer", "confidence", "gate", "block", "vllm", "human-review", "milvus"], "pad": 18 }
+  ],
+  "connections": [
+    { "id": "user-ui", "from": "user", "to": "streamlit", "label": "HTTPS", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "ui-orch", "from": "streamlit", "to": "orchestrator", "label": "用户消息", "fromSide": "bottom", "toSide": "top", "via": [[400, 150], [740, 150]] },
+    { "id": "orch-tool", "from": "orchestrator", "to": "tool-layer", "label": "调度", "fromSide": "bottom", "toSide": "top", "via": [[740, 380], [220, 380]], "labelAt": [480, 365] },
+    { "id": "orch-conf", "from": "orchestrator", "to": "confidence", "label": "调度", "fromSide": "bottom", "toSide": "top", "via": [[740, 380], [630, 380]], "labelAt": [665, 398] },
+    { "id": "orch-obs", "from": "orchestrator", "to": "observability", "label": "全链路 Trace", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "obs-return", "from": "observability", "to": "orchestrator", "label": "记忆回填·上下文读出", "fromSide": "top", "toSide": "top", "via": [[1160, 60], [740, 60]], "labelAt": [760, 110] },
+    { "id": "tool-conf", "from": "tool-layer", "to": "confidence", "label": "待校验输出", "fromSide": "right", "toSide": "left" },
+    { "id": "tool-vllm", "from": "tool-layer", "to": "vllm", "label": "推理请求", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "labelAt": [180, 610] },
+    { "id": "vllm-return", "from": "vllm", "to": "tool-layer", "label": "推理结果返回", "variant": "emphasis", "fromSide": "top", "toSide": "bottom", "labelAt": [260, 610] },
+    { "id": "conf-gate", "from": "confidence", "to": "gate", "label": "门控判定", "fromSide": "right", "toSide": "left", "labelAt": [815, 500] },
+    { "id": "conf-milvus", "from": "confidence", "to": "milvus", "label": "相似度信号", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "via": [[630, 640], [1050, 640]], "labelAt": [760, 628] },
+    { "id": "milvus-return", "from": "milvus", "to": "confidence", "label": "检索结果返回", "variant": "emphasis", "fromSide": "top", "toSide": "bottom", "via": [[1050, 600], [630, 600]], "labelAt": [840, 588] },
+    { "id": "gate-block", "from": "gate", "to": "block", "label": "拒绝·阻断", "variant": "security", "fromSide": "right", "toSide": "top", "via": [[1290, 515]], "labelAt": [1255, 548] },
+    { "id": "gate-human", "from": "gate", "to": "human-review", "label": "低置信·转人工", "variant": "security", "fromSide": "bottom", "toSide": "left", "via": [[990, 580], [1370, 580], [1370, 730], [450, 730], [450, 685]], "labelAt": [1165, 584] },
+    { "id": "human-milvus", "from": "human-review", "to": "milvus", "label": "回写·数据飞轮", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "gate-deliver", "from": "gate", "to": "delivery", "label": "高置信·交付", "fromSide": "top", "toSide": "left", "via": [[990, 260]], "labelAt": [1010, 340] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "编排层（LangGraph）", "items": ["Orchestrator 集中式路由 4 垂直 Agent", "抗原设计 / 方案规划 / 故障诊断 / 资料整理", "Shared State 跨 Agent 上下文共享"] },
+    { "dot": "emerald", "title": "工具与推理", "items": ["自研工具抽象层（Local Python / HTTP / JSON Schema）", "非 MCP 协议 · 内部可控", "vLLM 2×3090 生产推理"] },
+    { "dot": "rose", "title": "质量保障 + 可观测", "items": ["置信度门控：高置信交付 / 低置信转人工 / 拒绝阻断", "三层幻觉抑制 + 置信度融合", "人工审核回写 Milvus + 全链路 Trace（agent-ops-lite）", "最终交付输出：结构化研发报告 / 研发结论 → 用户"] }
+  ]
+}
