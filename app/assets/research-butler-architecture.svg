@@ -1,7 +1,7 @@
       <svg viewBox="0 0 1380 800" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" data-page-node-id="2DJ1yOBB2Vu23KR8IJhh9w">
   <style>
     /* ==========================================================
-       THEME VARIABLES — switch by toggling [data-theme] on <html>
+       THEME VARIABLES — switch by toggling [data-theme] on the html element
        ========================================================== */
     :root,
     [data-theme="dark"] {

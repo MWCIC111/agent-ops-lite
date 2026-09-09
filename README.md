@@ -256,9 +256,9 @@ flowchart LR
 
 Orchestrator 集中式编排 → 自研工具抽象层 → 置信度门控（高置信交付 / 低置信转人工 / 拒绝阻断）→ vLLM / Milvus / 记忆的**请求-响应双向**链路 → 人工审核回写 Milvus（数据飞轮）→ 全链路 Trace → 研发交付物。
 
-![研发管家系统架构全景](app/assets/research-butler-architecture.svg)
+![研发管家系统架构全景](app/assets/research-butler-architecture.png)
 
-> 交互版见在线 Demo 的「系统架构图」页 <http://82.156.184.242:8501>，可现场切 Classic / SIGNAL FLOW 预设；SVG 源与 HTML 产物同目录 `app/assets/`。
+> 交互版见在线 Demo 的「系统架构图」页 <http://82.156.184.242:8501>，可现场切 Classic / SIGNAL FLOW 预设；PNG / SVG / HTML 产物同目录 `app/assets/`（PNG 用于 GitHub README 稳定显示，SVG 矢量源与 HTML 交互版可下载）。
 
 ## 架构
 
@@ -313,8 +313,8 @@ agent-ops-lite/
 │     ├─ 9_数据管理.py
 │     ├─ 10_操作日志.py
 │     ├─ 11_人工审核回写.py
-│     └─ 12_系统架构图.py    # archify 架构图嵌入页（SVG/HTML 资产在 app/assets/）
-│  ├─ assets/                 # 静态资产（archify 生成的架构图：.svg / .html / .json 同目录）
+│     └─ 12_系统架构图.py    # archify 架构图嵌入页（HTML/PNG/SVG 资产在 app/assets/）
+│  ├─ assets/                 # 静态资产（archify 生成的架构图：.png / .svg / .html / .json 同目录；PNG 用于 README，HTML/SVG 用于交互页）
 ├─ examples/               # 接入示例（3 行接入 + LangGraph + MCP client）
 │  ├─ quickstart.py        # 3 行接入普通函数（含失败场景）
 │  ├─ langgraph_example.py # LangGraph 3 节点线性图接入（检索→生成→校验）
