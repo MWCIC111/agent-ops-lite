@@ -1,7 +1,12 @@
 """本地验证：mock 统一 LLM 入口，确认研发管家多步编排产生 7 步 Trace（不依赖 API Key）。
 
-低置信时会追加第 8 步「人工审核回写 · 已转人工队列」；本脚本 mock 的检索命中会
-走高置信路径，基础 7 步保持确定性，同时允许可选的第 8 步存在。
+步骤序列 = 基础 7 步（共享State检索 / Orchestrator编排 / 4 个垂直 Agent / 置信度融合），
+低置信时追加第 8 步「人工审核回写 · 已转人工队列」（可选尾步）。
+
+检索 mock 说明（2026-09-13）：线上 retrieve(top_k) 返回 top_k 条命中，检索支撑度
+ratio = top1 / mean(top_k)。本脚本的 mock 返回分数递减的 4 条，ratio≈1.33 > RATIO_GATE(1.14)
+→ 走高置信路径，基础 7 步确定性成立。若 mock 只返回单条（ratio=1.0），会因检索无
+"突出命中"而按设计转人工，尾步变成第 8 步。
 """
 import os
 import sys
@@ -34,9 +39,14 @@ def fake_completion(model, messages, temperature=0.3, max_tokens=500, **extra):
 
 
 def fake_retrieve(question, top_k=3):
-    return ("MOCK_CONTEXT", [{
-        "title": "mock", "content": "mock", "source": "wiki", "score": 1.0,
-    }])
+    """模拟线上 retrieve：返回 top_k 条分数递减的命中（而非单条），
+    使检索支撑度 ratio = top1/mean(top_k) 落在合理区间。"""
+    k = max(int(top_k), 1)
+    hits = [
+        {"title": "mock", "content": "mock", "source": "wiki", "score": 3.0 - 0.5 * i}
+        for i in range(k)
+    ]
+    return ("MOCK_CONTEXT", hits)
 
 
 agent_runner._chat_completion = fake_completion

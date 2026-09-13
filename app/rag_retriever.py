@@ -4,6 +4,9 @@
 - 知识库来自 ModelScope 华佗百科（医疗/IVD 友好），离线抽样 5000 段。
 - 索引在首次调用时构建并缓存，无需重模型、无需联网。
 - 仅在用户主动检索时调用，纯文本检索，契合「涨红跌绿」等中文语境无关。
+- 索引字段 = content + title × TITLE_WEIGHT。标题信息密度高（华佗百科的标题本身
+  就是问题式短句），实测把标题排除在索引外会让 Hit@5 从 1.000 掉到 0.485
+  （scripts/eval_rag.py 可复现）。可用环境变量 RAG_TITLE_WEIGHT=0 退回纯 content。
 """
 from __future__ import annotations
 
@@ -16,6 +19,10 @@ from rank_bm25 import BM25Okapi
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DOCS_PATH = os.path.join(_REPO_ROOT, "rag_data", "docs.jsonl")
 _REVIEWED_PATH = os.path.join(_REPO_ROOT, "rag_data", "reviewed.jsonl")
+
+# 标题在索引中的重复次数（0 = 退回纯 content 索引，用于消融对照）。
+# 5000 条语料实测：title×3 → Hit@5 1.000 / MRR@10 0.990；content-only 仅 0.485 / 0.380。
+TITLE_WEIGHT = int(os.environ.get("RAG_TITLE_WEIGHT", "3"))
 
 _cache: dict = {}
 
@@ -57,7 +64,11 @@ def _load():
                             docs.append(json.loads(line))
                         except json.JSONDecodeError:
                             pass
-        corpus = [lcut(d["content"]) for d in docs]
+        # 标题重复 TITLE_WEIGHT 次以提升其权重；标题缺失（如人工回写条目）时该项为空
+        corpus = [
+            lcut(d["content"]) + lcut(d.get("title", "")) * TITLE_WEIGHT
+            for d in docs
+        ]
         _cache["docs"] = docs
         _cache["index"] = BM25Okapi(corpus)
         _cache["size"] = len(docs)

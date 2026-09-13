@@ -1,10 +1,11 @@
 """butler_fusion.py — 研发管家「置信度融合 + 三层幻觉抑制」(数值化)
 
 把"置信度融合（相似度 + logprob + 业务规则）"落成可量化代码：
-  - 相似度分量：检索 top BM25 分经 sigmoid 归一
+  - 相似度分量：检索命中的查询内相对信号 ratio = top1/mean(top_k) 经 sigmoid 归一
   - logprob 分量：DeepSeek 真实 token logprob 均值经 sigmoid
   - 业务规则分量：答案是否含"不确定/无法/缺乏"等hedge 词 → 降权
 最终置信度 = 0.4*相似度 + 0.35*logprob + 0.25*规则，门控阈值 GATE。
+检索层另有独立硬门控（ratio < RATIO_GATE → 强制低置信），见下方常量区实测说明。
 
 与服务器原版"让 LLM 自评高/中/低"的 prompt 式实现不同，这里是**结构化数值融合**，
 可被门控、可被观测、可被回写闭环消费。
@@ -18,6 +19,22 @@ from typing import Tuple
 import openai
 
 GATE = 0.50  # 低于此置信度 → 转人工审核队列
+
+# ---- 检索层门控参数（2026-09-13 重校，scripts/eval_gate.py 可复现）----------
+# 原实现 _sigmoid(top_bm25 / 3.0)：BM25Okapi 原始分实测在 10~120 量级，分母 3.0
+# 使分量恒饱和在 ~1.0 —— 库内/库外问题拿到几乎相同的分量（AUC=0.517，等于抛硬币）；
+# 且「top_bm25 <= 0 强制低置信」因 BM25 分数恒为正而永不触发（死代码，实测 0/20）。
+# 现改用查询内相对信号 ratio = top1 / mean(top_k)：对绝对量级与语料规模不敏感。
+# 实测（200 库内 + 20 库外，top_k=4，title 加权索引）：
+#   ratio            AUC=0.982   库内 med 1.46 ｜ 库外 med 1.06
+#   gap(top1-top2)   AUC=0.965
+#   top1 绝对分       AUC=0.894
+#   z-score          AUC=0.829   （作为查询内信号时被 top_k 封顶在 √(k-1)≈1.73）
+# FPR≤10% 约束下选点 ratio≥1.14 → 库内保留 95.5%、库外拦截 90%
+#（改造前的 top1 绝对分在同约束下只保留 49.0% 库内问题）。
+RETR_MID = 1.14    # ratio → 分量 的映射中点
+RETR_SCALE = 0.09  # 映射陡度
+RATIO_GATE = 1.14  # ratio 低于此值 → 检索无有效支撑，强制低置信
 
 _HEDGE_WORDS = ("不确定", "无法", "缺乏", "没有足够", "不能回答", "无法回答", "不知道", "不足")
 
@@ -35,9 +52,22 @@ def _sigmoid(x: float) -> float:
         return 0.0 if x < 0 else 1.0
 
 
-def _retrieval_component(top_bm25: float) -> float:
-    """BM25 分（可正可负）经 sigmoid 映射到 0..1。top=0 → 0.5 基线。"""
-    return _sigmoid(top_bm25 / 3.0)
+def _retrieval_signal(hits: list) -> tuple:
+    """由命中的 BM25 分数算「检索支撑度」，返回 (分量 0..1, ratio, top1)。
+
+    ratio = top1 / mean(全部命中分数)，是查询内相对信号：为什么不用绝对分，
+    见上方常量区的实测记录（绝对分 AUC 0.517 ≈ 抛硬币，ratio 0.982）。
+    命中为空、或分数全为 0（无 token 重叠）→ 视为无支撑，分量取 0。
+    """
+    scores = [float(h.get("score", 0.0) or 0.0) for h in hits if h]
+    if not scores:
+        return 0.0, 0.0, 0.0
+    top1 = max(scores)
+    mean = sum(scores) / len(scores)
+    if mean <= 1e-9:
+        return 0.0, 0.0, 0.0
+    ratio = top1 / mean
+    return _sigmoid((ratio - RETR_MID) / RETR_SCALE), ratio, top1
 
 
 def _rule_component(text: str) -> float:
@@ -74,10 +104,11 @@ def fusion_with_confidence(
     question: str,
     ctx: str,
     parts: list,
-    top_bm25: float,
+    hits: list,
 ) -> Tuple[str, float, int, int, int]:
     """调用 DeepSeek 做融合+三层校验，返回 (文本, 置信度, in_tok, out_tok, 耗时ms)。
 
+    hits：检索命中列表（含 score），用于算检索支撑度 ratio = top1/mean(top_k)。
     优先使用真实 logprobs；若端点不支持/异常，则回退到"相似度+规则"启发式，
     保证在任何 DeepSeek 兼容端点下都能产出数值置信度。
     """
@@ -117,7 +148,7 @@ def fusion_with_confidence(
 
     ms = max(int((time.perf_counter() - t0) * 1000), 1)
 
-    retr_comp = _retrieval_component(top_bm25)
+    retr_comp, ratio, _top1 = _retrieval_signal(hits)
     rule_comp = _rule_component(text)
     # 输出层对齐校验：模型首行判定"不可信" → 乘性强惩罚 ×0.35，
     # 使"检索依据与问题不对齐/硬编回答"必然跌破 GATE 转人工（2026-09-03 实测校准）。
@@ -134,8 +165,10 @@ def fusion_with_confidence(
         3,
     )
 
-    # 检索几乎零命中（无 token 重叠）→ 强制低置信，必转人工
-    if top_bm25 <= 0.0:
+    # 检索层硬门控：查询内相对信号低于阈值 → 检索依据不足以支撑回答，强制低置信转人工。
+    # 这条替代了原「top_bm25 <= 0」规则（BM25 分数恒为正，原规则实测 0/20 永不触发）。
+    # 效果：库外问题的拦截不再只依赖 LLM 自评那一层，检索层成为独立的一道闸门。
+    if ratio < RATIO_GATE:
         confidence = min(confidence, 0.20)
 
     return text, confidence, tin, tout, ms

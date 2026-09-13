@@ -153,7 +153,6 @@ def fusion_node(state: ButlerState) -> dict:
             if r["name"] == name:
                 parts.append(f"### {name}\n{r['ans']}")
                 break
-    top_bm25 = max((h.get("score", 0.0) for h in state["hits"]), default=0.0)
 
     reviewed_hits = [
         h for h in state["hits"]
@@ -171,7 +170,7 @@ def fusion_node(state: ButlerState) -> dict:
         note = "（人工审核回写知识命中 · 直接采信）"
     else:
         text, confidence, tin, tout, ms = fusion_with_confidence(
-            state["model"], state["question"], state["context"], parts, top_bm25
+            state["model"], state["question"], state["context"], parts, state["hits"]
         )
         need_human = confidence < GATE
         if need_human:
