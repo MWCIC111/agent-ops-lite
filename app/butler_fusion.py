@@ -5,7 +5,7 @@
   - logprob 分量：DeepSeek 真实 token logprob 均值经 sigmoid
   - 业务规则分量：答案是否含"不确定/无法/缺乏"等hedge 词 → 降权
 最终置信度 = 0.4*相似度 + 0.35*logprob + 0.25*规则，门控阈值 GATE。
-检索层另有独立硬门控（ratio < RATIO_GATE → 强制低置信），见下方常量区实测说明。
+检索层另有独立硬门控（abs 与 ratio 两个信号都报警 → 强制低置信），见下方常量区实测说明。
 
 与服务器原版"让 LLM 自评高/中/低"的 prompt 式实现不同，这里是**结构化数值融合**，
 可被门控、可被观测、可被回写闭环消费。
@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import math
+import os
 import re
 from typing import Tuple
 
@@ -20,21 +21,34 @@ import openai
 
 GATE = 0.50  # 低于此置信度 → 转人工审核队列
 
-# ---- 检索层门控参数（2026-09-13 重校，scripts/eval_gate.py 可复现）----------
-# 原实现 _sigmoid(top_bm25 / 3.0)：BM25Okapi 原始分实测在 10~120 量级，分母 3.0
-# 使分量恒饱和在 ~1.0 —— 库内/库外问题拿到几乎相同的分量（AUC=0.517，等于抛硬币）；
-# 且「top_bm25 <= 0 强制低置信」因 BM25 分数恒为正而永不触发（死代码，实测 0/20）。
-# 现改用查询内相对信号 ratio = top1 / mean(top_k)：对绝对量级与语料规模不敏感。
-# 实测（200 库内 + 20 库外，top_k=4，title 加权索引）：
-#   ratio            AUC=0.982   库内 med 1.46 ｜ 库外 med 1.06
-#   gap(top1-top2)   AUC=0.965
-#   top1 绝对分       AUC=0.894
-#   z-score          AUC=0.829   （作为查询内信号时被 top_k 封顶在 √(k-1)≈1.73）
-# FPR≤10% 约束下选点 ratio≥1.14 → 库内保留 95.5%、库外拦截 90%
-#（改造前的 top1 绝对分在同约束下只保留 49.0% 库内问题）。
-RETR_MID = 1.14    # ratio → 分量 的映射中点
+# ---- 检索层硬门控参数（2026-09-13 校订，scripts/eval_gate.py --natural 可复现）------
+# ⚠ 这条注释是结论，不是过程。同一类坑踩了三次：
+#   [坑1] 原实现 _sigmoid(top_bm25 / 3.0)：BM25Okapi 原始分在 10~120 量级，分母 3.0
+#         使分量恒饱和 ≈1.0（库内/库外拿到同一分量，AUC 0.517 ≈ 抛硬币）；
+#         配套「top_bm25 <= 0 → 强制低置信」因分数恒为正而永不触发（死代码，实测 0/20）。
+#   [坑2] 改用查询内相对信号 ratio = top1/mean(top_k) 后，通用域（华佗）AUC 0.983 看着很好；
+#         换到 IVD 语料（gold 集≈54 块）AUC 掉到 0.168 —— 因为一个答案由多块共同承载时
+#         top4 全部命中同一文档、分数彼此接近，ratio 恒等于 1.0，信号自毁。
+#   [坑3 · 最要命] 换成 top1 绝对分后，IVD 语料 easy 档 AUC=1.000、「库内保留 100%」，
+#         但它是**查询风格的产物**：easy 档正例取自文档标题逐字（top1 min 30.32），
+#         而人工撰写的口语化库内问题 top1 只有 15.4~37.6，与库外（0~29.3）**完全重叠**。
+#         按那个阈值（25.4）上线，实测误拦 13/20 = 65% 的真实库内提问。
+#
+# 结论（决定当前默认值）：**BM25 分数在本语料上不具备「库内 / 库外判别」能力。**
+# 因此检索层门控**降级为「极端无支撑熔断」而非判别器**：
+#   · 只拦「两个信号同时报警」的极端情形（AND），实测库内误拦 0%（20/20 保留）；
+#   · 库外拦截只覆盖 2/21 ≈ 10%，其余交给后续两层（LLM 自评 + 输出层对齐 + hedge 规则）；
+#   · ABS_GATE 默认取 12.0（而非按 easy 档选出的 25.4）——宁可基本不拦，也不误伤库内。
+# 灵敏度（scripts/eval_gate.py --natural 可复现）：
+#   ABS_GATE=25.4 → 库内保留 35%（误拦 13/20）｜库外拦截 76%   ← easy 档选点，已弃用
+#   ABS_GATE=15.0 → 库内保留 100%            ｜库外拦截 29%
+#   ABS_GATE=12.0 → 库内保留 100%            ｜库外拦截 10%   ← 当前默认（保守）
+# 待办：判断能否提高需 hard 档（口语化正例的规模化版本）后重新标定。
+# 阈值可用环境变量覆盖，便于换语料后免改代码重标定：RAG_ABS_GATE / RAG_RATIO_GATE。
+RETR_MID = 1.14    # ratio → 分量 的映射中点（软信号，进置信度公式）
 RETR_SCALE = 0.09  # 映射陡度
-RATIO_GATE = 1.14  # ratio 低于此值 → 检索无有效支撑，强制低置信
+ABS_GATE = float(os.environ.get("RAG_ABS_GATE", "12.0"))       # top1 绝对分下限（极端无支撑熔断）
+RATIO_GATE = float(os.environ.get("RAG_RATIO_GATE", "1.14"))   # ratio 下限（AND 的另一条件）
 
 _HEDGE_WORDS = ("不确定", "无法", "缺乏", "没有足够", "不能回答", "无法回答", "不知道", "不足")
 
@@ -148,7 +162,7 @@ def fusion_with_confidence(
 
     ms = max(int((time.perf_counter() - t0) * 1000), 1)
 
-    retr_comp, ratio, _top1 = _retrieval_signal(hits)
+    retr_comp, ratio, top1 = _retrieval_signal(hits)
     rule_comp = _rule_component(text)
     # 输出层对齐校验：模型首行判定"不可信" → 乘性强惩罚 ×0.35，
     # 使"检索依据与问题不对齐/硬编回答"必然跌破 GATE 转人工（2026-09-03 实测校准）。
@@ -165,10 +179,11 @@ def fusion_with_confidence(
         3,
     )
 
-    # 检索层硬门控：查询内相对信号低于阈值 → 检索依据不足以支撑回答，强制低置信转人工。
-    # 这条替代了原「top_bm25 <= 0」规则（BM25 分数恒为正，原规则实测 0/20 永不触发）。
-    # 效果：库外问题的拦截不再只依赖 LLM 自评那一层，检索层成为独立的一道闸门。
-    if ratio < RATIO_GATE:
+    # 检索层硬门控：**两个信号都报警**才判「无检索支撑」，强制低置信转人工（AND，保守）。
+    # 单用 ratio 会在 gold 集大的语料上失效（实测 IVD 语料库内保留率 0.0%），单用绝对分
+    # 则受语料量级与查询风格影响；AND 对单信号失效有韧性，且优先不误拦库内。
+    # 阈值来源、噪声底检查与未验证项见上方常量区；统计口径见 scripts/eval_gate.py。
+    if ratio < RATIO_GATE and top1 < ABS_GATE:
         confidence = min(confidence, 0.20)
 
     return text, confidence, tin, tout, ms

@@ -3,10 +3,12 @@
 步骤序列 = 基础 7 步（共享State检索 / Orchestrator编排 / 4 个垂直 Agent / 置信度融合），
 低置信时追加第 8 步「人工审核回写 · 已转人工队列」（可选尾步）。
 
-检索 mock 说明（2026-09-13）：线上 retrieve(top_k) 返回 top_k 条命中，检索支撑度
-ratio = top1 / mean(top_k)。本脚本的 mock 返回分数递减的 4 条，ratio≈1.33 > RATIO_GATE(1.14)
-→ 走高置信路径，基础 7 步确定性成立。若 mock 只返回单条（ratio=1.0），会因检索无
-"突出命中"而按设计转人工，尾步变成第 8 步。
+检索 mock 说明（2026-09-13 二次校订）：线上 retrieve(top_k) 返回 top_k 条命中，检索层
+硬门控为「两个信号都报警才强制低置信」——
+    top1 < ABS_GATE(25.4)  且  ratio = top1/mean(top_k) < RATIO_GATE(1.14)
+本脚本的 mock 按**真实语料量级**给分（top1=40.0 ≥ 25.4，ratio≈1.39 ≥ 1.14），两个信号
+都不报警 → 走高置信路径，基础 7 步确定性成立。若 mock 分数只有个位数（早期版本是 3.0），
+top1 会低于 ABS_GATE 而按设计转人工，尾步变成第 8 步——那是量级不真实造成的假失败。
 """
 import os
 import sys
@@ -39,11 +41,15 @@ def fake_completion(model, messages, temperature=0.3, max_tokens=500, **extra):
 
 
 def fake_retrieve(question, top_k=3):
-    """模拟线上 retrieve：返回 top_k 条分数递减的命中（而非单条），
-    使检索支撑度 ratio = top1/mean(top_k) 落在合理区间。"""
+    """模拟线上 retrieve：返回 top_k 条分数递减的命中（而非单条）。
+
+    分数按**真实 IVD 语料的 BM25 量级**给：语料上库内查询的 top1 实测中位 55、
+    负例上限约 29，噪声底 p90 约 26。这里取 top1=40（明显高于 ABS_GATE=25.4）
+    且 ratio≈1.39（高于 RATIO_GATE=1.14），代表「检索支撑充分」的高置信路径。
+    """
     k = max(int(top_k), 1)
     hits = [
-        {"title": "mock", "content": "mock", "source": "wiki", "score": 3.0 - 0.5 * i}
+        {"title": "mock", "content": "mock", "source": "wiki", "score": 40.0 - 8.0 * i}
         for i in range(k)
     ]
     return ("MOCK_CONTEXT", hits)
