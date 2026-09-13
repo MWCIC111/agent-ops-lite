@@ -2,7 +2,7 @@
 
 把 Demo 从「模拟数据」升级为「真实数据驱动」：批量跑真实 Agent 问答，
 每次调用都被 agent_ops @trace 采集并落 SQLite（agent_ops.db），
-其余 8 个观测页面（链路追踪 / 工具分析 / 成本核算 / 告警 / 版本对比 / 灰度 / 拓扑 / 总览）
+其余观测页面
 即可直接消费真实 token / 延迟 / 成本 / 工具 / 知识库召回。
 
 headless，无 streamlit 依赖。在服务器（或本地）运行：
@@ -12,6 +12,9 @@ headless，无 streamlit 依赖。在服务器（或本地）运行：
 
   # 自定义体量
   python3 scripts/seed_real_data.py --rag 60 --butler 10 --general 20 --failures 3 --spread-days 14
+
+  注意：默认体量约 66 个场景（研发管家再加多步调用），不要挂高频 cron；
+  定时播种建议缩小为 --rag 5 --butler 2 --general 3 --failures 1。
 
   # 后台运行（推荐，研发管家为多步编排较慢）
   nohup python3 scripts/seed_real_data.py > seed.log 2>&1 &
@@ -27,11 +30,19 @@ import sys
 import time
 from datetime import datetime, timedelta
 
+# Windows 默认 GBK 控制台无法打印 ✔/✗/▶：统一强制 UTF-8 输出。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _APP_DIR = os.path.join(_REPO_ROOT, "app")
 for _p in (_REPO_ROOT, _APP_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+
+LOCK_FILE = os.path.join(_REPO_ROOT, ".seed.lock")
 
 
 def _load_dotenv() -> None:
@@ -193,17 +204,43 @@ def _run(scenario: str, query: str, model: str, spread_days: int, backdate_on: b
         return False
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="用真实 DeepSeek+RAG 生成真实 Trace 落库")
-    ap.add_argument("--rag", type=int, default=40, help="知源 RAG 问答条数")
-    ap.add_argument("--butler", type=int, default=8, help="研发管家多步编排条数")
-    ap.add_argument("--general", type=int, default=15, help="通用问答条数")
-    ap.add_argument("--failures", type=int, default=3, help="注入真实失败条数（用非法模型触发真实 API 错误）")
-    ap.add_argument("--spread-days", type=int, default=14, help="时间戳散布天数（0=不回拨，全部为现在）")
-    ap.add_argument("--model", type=str, default=agent_runner.DEFAULT_MODEL, help="使用的模型名")
-    ap.add_argument("--no-backdate", action="store_true", help="不回拨时间戳（全部为当前时间）")
-    args = ap.parse_args()
+def _pid_alive(pid: int) -> bool:
+    """POSIX 下探测进程是否存活；其他平台保守视为存活。"""
+    if pid <= 0:
+        return False
+    if os.name != "posix":
+        return True
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
 
+
+def _acquire_lock() -> bool:
+    """并发播种防重入：进程存活的旧锁直接拒绝，残留锁则接管。"""
+    if os.path.exists(LOCK_FILE):
+        try:
+            with open(LOCK_FILE, encoding="utf-8") as f:
+                pid = int(f.read().strip() or "0")
+        except (OSError, ValueError):
+            pid = 0
+        if _pid_alive(pid):
+            print(f"✗ 已有播种任务在运行（PID {pid}），本次退出。", flush=True)
+            return False
+    with open(LOCK_FILE, "w", encoding="utf-8") as f:
+        f.write(str(os.getpid()))
+    return True
+
+
+def _release_lock() -> None:
+    try:
+        os.remove(LOCK_FILE)
+    except FileNotFoundError:
+        pass
+
+
+def _run_main(args: argparse.Namespace) -> None:
     if not agent_runner.OPENAI_API_KEY:
         print("✗ 未检测到 DEEPSEEK_API_KEY 环境变量，无法调用真实 API。请先配置后重试。", flush=True)
         sys.exit(1)
@@ -254,6 +291,25 @@ def main() -> None:
     cost = agent_runner.store.count()
     print(f"✔ 播种完成：成功 {ok}/{total}，耗时 {time.time()-t0:.0f}s，"
           f"agent_ops.db 现有 {cost} 条 Trace。", flush=True)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="用真实 DeepSeek+RAG 生成真实 Trace 落库")
+    ap.add_argument("--rag", type=int, default=40, help="知源 RAG 问答条数")
+    ap.add_argument("--butler", type=int, default=8, help="研发管家多步编排条数")
+    ap.add_argument("--general", type=int, default=15, help="通用问答条数")
+    ap.add_argument("--failures", type=int, default=3, help="注入真实失败条数（用非法模型触发真实 API 错误）")
+    ap.add_argument("--spread-days", type=int, default=14, help="时间戳散布天数（0=不回拨，全部为现在）")
+    ap.add_argument("--model", type=str, default=agent_runner.DEFAULT_MODEL, help="使用的模型名")
+    ap.add_argument("--no-backdate", action="store_true", help="不回拨时间戳（全部为当前时间）")
+    args = ap.parse_args()
+
+    if not _acquire_lock():
+        sys.exit(2)
+    try:
+        _run_main(args)
+    finally:
+        _release_lock()
 
 
 if __name__ == "__main__":

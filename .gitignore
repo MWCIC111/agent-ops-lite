@@ -27,5 +27,12 @@ agent_ops.db
 # RAG 离线索引缓存（运行时从 docs.jsonl 重建，无需入库）
 rag_data/*.pkl
 
+# 人工审核回写数据（运行时生成，不应入库）
+rag_data/reviewed.jsonl
+
+# 播种后台任务的日志与并发锁（运行时生成，不应入库）
+seed.log
+.seed.lock
+
 # 操作人员操作时间线（运行时生成，不应入库）
 operations.log

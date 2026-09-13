@@ -21,3 +21,23 @@ jobs:
       # 核心库零依赖：无需 pip install，直接跑测试脚本
       - name: Run core tests (zero-dependency)
         run: python tests/test_core.py
+
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install app dependencies
+        run: pip install -r app/requirements.txt
+
+      - name: Compile app, scripts, examples and tests
+        run: python -m py_compile app/*.py app/pages/*.py agent_ops/*.py scripts/*.py examples/*.py tests/*.py
+
+      - name: Run agent_runner resilience regression
+        run: python tests/test_agent_runner.py
+
+      - name: Verify butler 7-step trace
+        run: python scripts/verify_butler.py

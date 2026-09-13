@@ -7,7 +7,7 @@
      把真实 Trace 落库，让所有观测页面都有真实数据可看。
 
 所有真实调用都被 agent_ops @trace 采集，自动落 SQLite（agent_ops.db），
-其余 8 个观测页面直接消费。
+其余观测页面直接消费。
 
 安全：API Key 只从环境变量读取，不写进代码 / 不提交 GitHub。
 """
@@ -101,8 +101,12 @@ def _timed(fn):
     return result, ms
 
 
-def _deepseek_chat(model: str, messages: list, temperature: float = 0.3,
-                   max_tokens: int = 400):
+def _chat_completion(model: str, messages: list, temperature: float = 0.3,
+                     max_tokens: int = 400, **extra):
+    """统一韧性入口：配额熔断 + 超时 + 指数退避重试 + 兜底模型。
+
+    返回 openai 响应对象；所有真实 LLM 调用（含 butler_fusion）都应走这里。
+    """
     from openai import OpenAI
 
     if not OPENAI_API_KEY:
@@ -119,37 +123,75 @@ def _deepseek_chat(model: str, messages: list, temperature: float = 0.3,
         models_to_try.append(_FALLBACK_MODEL)
 
     last_err: Exception | None = None
-    for attempt in range(_MAX_RETRIES):
-        for m in models_to_try:
+    # 主模型先独立退避重试，耗尽后才切兜底模型，每个模型都有 _MAX_RETRIES 次机会
+    for m in models_to_try:
+        for attempt in range(_MAX_RETRIES):
             try:
                 client = OpenAI(
                     base_url=OPENAI_BASE_URL,
                     api_key=OPENAI_API_KEY,
                     timeout=_REQ_TIMEOUT,
                 )
-                resp = client.chat.completions.create(
+                return client.chat.completions.create(
                     model=m, messages=messages, temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-                usage = resp.usage
-                return (
-                    resp.choices[0].message.content,
-                    int(usage.prompt_tokens or 0),
-                    int(usage.completion_tokens or 0),
+                    max_tokens=max_tokens, **extra,
                 )
             except _RETRYABLE as e:
-                # 瞬态错误：记录后进入退避，下次重试（含兜底模型）
+                # 瞬态错误：记录并退避，继续重试当前模型
                 last_err = e
-                break
-            except openai.OpenAIError as e:
+                if attempt < _MAX_RETRIES - 1:
+                    time.sleep(_BASE_BACKOFF * (2 ** attempt))
+            except openai.OpenAIError:
                 # 非瞬态（鉴权/404/参数）：立即上抛，不重试
                 raise
-        # 指数退避后进入下一轮尝试
-        if attempt < _MAX_RETRIES - 1:
-            time.sleep(_BASE_BACKOFF * (2 ** attempt))
 
-    # 重试耗尽仍失败：原样抛出最后一条瞬态错误
+    # 所有模型重试耗尽仍失败：原样抛出最后一条瞬态错误
     raise last_err or RuntimeError("未知 LLM 调用错误（重试耗尽）")
+
+
+def _deepseek_chat(model: str, messages: list, temperature: float = 0.3,
+                   max_tokens: int = 400):
+    resp = _chat_completion(
+        model, messages, temperature=temperature, max_tokens=max_tokens
+    )
+    usage = resp.usage
+    return (
+        resp.choices[0].message.content,
+        int(usage.prompt_tokens or 0),
+        int(usage.completion_tokens or 0),
+    )
+
+
+def _mean_token_logprob(resp) -> float | None:
+    """提取生成 token 的 mean logprob；端点不支持时返回 None。"""
+    choice = resp.choices[0]
+    lp_obj = getattr(choice, "logprobs", None)
+    if not lp_obj or not getattr(lp_obj, "content", None):
+        return None
+    vals = [
+        t.top_logprobs[0].logprob
+        for t in lp_obj.content
+        if getattr(t, "top_logprobs", None)
+    ]
+    if not vals:
+        return None
+    return sum(vals) / len(vals)
+
+
+def chat_with_logprobs(model: str, messages: list, temperature: float = 0.3,
+                       max_tokens: int = 500):
+    """走统一韧性层的 logprobs 版调用，返回 (text, tin, tout, mean_logprob|None)。"""
+    resp = _chat_completion(
+        model, messages, temperature=temperature, max_tokens=max_tokens,
+        logprobs=True, top_logprobs=1,
+    )
+    usage = resp.usage
+    return (
+        resp.choices[0].message.content,
+        int(usage.prompt_tokens or 0),
+        int(usage.completion_tokens or 0),
+        _mean_token_logprob(resp),
+    )
 
 
 def _retrieve_context(question: str, top_k: int = 3) -> tuple[str, list]:
@@ -179,7 +221,7 @@ def run_research_butler(question: str, model: str) -> str:
     4 垂直 Agent(Send 扇出) → 置信度融合 + 三层幻觉抑制 → 低置信转人工审核队列。
 
     底层委托 app/butler_graph.run_butler，复用本模块的 _deepseek_chat / _retrieve_context，
-    保持返回 str 与 7 步 Trace 顺序不变（8_真实Agent.py 与 scripts/verify_butler.py 兼容）。
+    保持返回 str 与 7 步基础 Trace 顺序；低置信时追加人工审核回写步（共 8 步）。
     """
     MODEL_PRICE.setdefault(model, (0.0, 0.0))
     from butler_graph import run_butler  # 惰性导入，避免循环依赖

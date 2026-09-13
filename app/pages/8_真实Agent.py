@@ -2,7 +2,7 @@
 8_真实Agent.py — 真实 Agent 调用（接入 DeepSeek API，被 agent_ops @trace 采集）
 
 把 Demo 从「模拟数据」升级为「真实可观测」：
-  一次真实 LLM 调用 -> 真实 token / 延迟 / 成本 -> 自动落 SQLite -> 其余 8 个观测页面直接消费。
+  一次真实 LLM 调用 -> 真实 token / 延迟 / 成本 -> 自动落 SQLite -> 其余观测页面直接消费。
 
 三个场景对应简历项目：
   - 研发管家 · 研发问答：真 LangGraph 集中式多 Agent 编排（Orchestrator + 共享 State +
@@ -115,7 +115,7 @@ if st.button("运行真实 Agent", type="primary"):
         with st.spinner(spinner_text):
             try:
                 answer = run_real_agent(scenario, question.strip(), model.strip())
-                st.success("调用完成，已落库 agent_ops.db（其余 8 个页面可直接看到真实 Trace）")
+                st.success("调用完成，已落库 agent_ops.db（其余观测页面可直接看到真实 Trace）")
                 log_operation("真实Agent", "运行成功", f"{scenario}：{question.strip()[:60]}")
                 st.subheader("回答")
                 st.markdown(answer)
@@ -128,7 +128,7 @@ if st.button("运行真实 Agent", type="primary"):
             except Exception as e:  # noqa: BLE001
                 st.error(f"调用失败：{type(e).__name__}: {e}")
                 log_operation("真实Agent", "运行失败", f"{scenario}：{question.strip()[:60]} - {type(e).__name__}")
-                st.info("检查：/home/ubuntu/agent-ops-lite/.env 是否配置了 DEEPSEEK_API_KEY；systemctl 是否已重启加载环境变量")
+                st.info("检查：项目根目录 .env 是否配置了 DEEPSEEK_API_KEY；重启服务以重新加载环境变量")
 
 # ------------------- 最近真实 Trace -------------------
 st.divider()

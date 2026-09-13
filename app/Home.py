@@ -44,7 +44,7 @@ rows = [
 df = pd.DataFrame(rows)
 
 # ---------- 标题 ----------
-st.title("agent-ops-lite · 总览 v0.1.0")
+st.title("agent-ops-lite · 总览 v0.3.0")
 show_clock()
 page_visit("总览")
 if mode == "real":

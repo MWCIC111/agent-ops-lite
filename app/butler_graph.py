@@ -129,7 +129,7 @@ def vertical_node(state: ButlerState) -> dict:
 
 
 def record_agents_node(state: ButlerState) -> dict:
-    """按固定字典序落 4 步 Trace（保证 7 步顺序确定性，与原 verify_butler 断言一致）。"""
+    """按固定字典序落 4 步 Trace（保证前 7 步顺序确定性；低置信时另有第 8 步入审核队列）。"""
     by_name = {r["name"]: r for r in state["agent_results"]}
     for name, _ in BUTLER_AGENTS.items():
         r = by_name.get(name, {"ans": "", "tin": 0, "tout": 0, "ms": 1})

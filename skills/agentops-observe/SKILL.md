@@ -94,6 +94,6 @@ print(fresh.traces())                            # 历史自动恢复
 ## 注意事项
 
 - `agent_ops` 是**零依赖**纯标准库实现，无需安装第三方包，把 `agent_ops/` 目录放进项目即可
-- 未知模型会抛 `KeyError` —— 在 `agent_ops/cost.py` 的 `MODEL_PRICE` 补单价即可，避免静默算错账
+- 未知模型：采集/聚合路径按 0 价兜底（不抛错但会漏算成本）；直接调 `step_cost_usd` 才抛 `KeyError`。需要准确核算时在 `agent_ops/cost.py` 的 `MODEL_PRICE` 补单价
 - 采集的数据结构与 `app/demo_data.py` 完全一致，面板可直接消费
 - 换存储后端（Elasticsearch / ClickHouse）：实现 `TraceStore` 协议（`save/load/clear`）即可，上层零改动

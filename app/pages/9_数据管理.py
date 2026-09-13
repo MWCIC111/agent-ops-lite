@@ -5,8 +5,8 @@
   - 一键播种真实数据（调用 DeepSeek + 华佗百科 RAG，批量落库）
   - 清空真实数据（重新播种前用）
 
-所有页面（总览 / 链路追踪 / 工具分析 / 成本核算 / 告警 / 版本对比 / 灰度 / 拓扑）
-现在统一读取 agent_ops.db 的真实 Trace；数据库为空时回退模拟数据并打标识。
+所有页面（总览首页 + 12 个功能页面）现在统一读取 agent_ops.db 的真实 Trace；
+数据库为空时回退模拟数据并打标识。
 """
 import os
 import subprocess
@@ -28,6 +28,26 @@ from agent_ops import SQLiteStore  # noqa: E402
 DB_PATH = os.path.join(_REPO_ROOT, "agent_ops.db")
 SEED_SCRIPT = os.path.join(_REPO_ROOT, "scripts", "seed_real_data.py")
 SEED_LOG = os.path.join(_REPO_ROOT, "seed.log")
+SEED_LOCK = os.path.join(_REPO_ROOT, ".seed.lock")
+
+
+def _seed_lock_alive() -> bool:
+    """锁文件存在且记录进程仍存活时为 True，残留锁则返回 False 由启动逻辑接管。"""
+    if not os.path.exists(SEED_LOCK):
+        return False
+    try:
+        with open(SEED_LOCK, encoding="utf-8") as f:
+            pid = int(f.read().strip() or "0")
+    except (OSError, ValueError):
+        return False
+    if pid <= 0 or os.name != "posix":
+        return True
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
 
 st.set_page_config(page_title="数据管理 · agent-ops-lite", layout="wide")
 st.title("🗄️ 数据管理（真实数据源）")
@@ -73,27 +93,37 @@ with col1:
     general_n = st.number_input("通用问答条数", min_value=0, max_value=200, value=15)
     fail_n = st.number_input("注入真实失败条数", min_value=0, max_value=20, value=3)
 with col2:
-    cmd = (f"./venv/bin/python scripts/seed_real_data.py --rag {rag_n} "
+    cmd = (f"python scripts/seed_real_data.py --rag {rag_n} "
            f"--butler {butler_n} --general {general_n} --failures {fail_n} --spread-days 14")
-    st.code(f"cd /home/ubuntu/agent-ops-lite && set -a && source .env && set +a && nohup {cmd} > seed.log 2>&1 &",
+    st.code(f"cd {_REPO_ROOT} && set -a && source .env && set +a && nohup {cmd} > seed.log 2>&1 &",
             language="bash")
-    st.caption("复制上面的命令到 OrcaTerm 执行；或点右侧按钮在服务器后台直接启动。")
+    st.caption("复制上面的命令到终端执行；或点右侧按钮在服务器后台直接启动。")
 
 run_col, _ = st.columns([1, 1])
 if run_col.button("🚀 在服务器后台运行播种", type="primary"):
-    try:
-        subprocess.Popen(
-            f"nohup {sys.executable} scripts/seed_real_data.py --rag {rag_n} "
-            f"--butler {butler_n} --general {general_n} --failures {fail_n} "
-            f"--spread-days 14 > seed.log 2>&1 &",
-            shell=True, cwd=_REPO_ROOT,
-        )
-        st.success("已在后台启动播种（研发管家较慢，请耐心等待）。"
-                   "播种期间请勿在「真实 Agent」页点运行，避免并发写库。刷新本页查看进度。")
-        log_operation("数据管理", "播种启动",
-                      f"rag={rag_n} butler={butler_n} general={general_n} failures={fail_n}")
-    except Exception as e:  # noqa: BLE001
-        st.error(f"启动失败：{e}")
+    if _seed_lock_alive():
+        st.error("已有播种任务在运行，请勿重复启动。")
+    else:
+        try:
+            if os.path.exists(SEED_LOCK):
+                os.remove(SEED_LOCK)
+            with open(SEED_LOG, "ab") as log_file:
+                popen_kwargs = {"cwd": _REPO_ROOT, "stdout": log_file,
+                                "stderr": subprocess.STDOUT}
+                if os.name == "posix":
+                    popen_kwargs["start_new_session"] = True
+                subprocess.Popen(
+                    [sys.executable, SEED_SCRIPT, "--rag", str(rag_n),
+                     "--butler", str(butler_n), "--general", str(general_n),
+                     "--failures", str(fail_n), "--spread-days", "14"],
+                    **popen_kwargs,
+                )
+            st.success("已在后台启动播种（研发管家较慢，请耐心等待）。"
+                       "播种期间请勿在「真实 Agent」页点运行，避免并发写库。刷新本页查看进度。")
+            log_operation("数据管理", "播种启动",
+                          f"rag={rag_n} butler={butler_n} general={general_n} failures={fail_n}")
+        except Exception as e:  # noqa: BLE001
+            st.error(f"启动失败：{e}")
 
 if st.button("🔄 刷新统计"):
     st.rerun()

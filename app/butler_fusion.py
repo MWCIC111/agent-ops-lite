@@ -12,13 +12,10 @@
 from __future__ import annotations
 
 import math
-import os
 import re
 from typing import Tuple
 
-OPENAI_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-OPENAI_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEFAULT_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+import openai
 
 GATE = 0.50  # 低于此置信度 → 转人工审核队列
 
@@ -86,7 +83,7 @@ def fusion_with_confidence(
     """
     import time
 
-    from openai import OpenAI
+    from agent_runner import _deepseek_chat, chat_with_logprobs
 
     sys_prompt = (
         "你是置信度融合与幻觉抑制模块：综合各垂直 Agent 结论，做三层校验"
@@ -105,40 +102,18 @@ def fusion_with_confidence(
     ]
 
     t0 = time.perf_counter()
-    client = OpenAI(base_url=OPENAI_BASE_URL, api_key=OPENAI_API_KEY)
     try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.3,
-            max_tokens=500,
-            logprobs=True,
-            top_logprobs=1,
+        text, tin, tout, mean_lp = chat_with_logprobs(
+            model, messages, temperature=0.3, max_tokens=500
         )
-        text = resp.choices[0].message.content or ""
-        tin = int(resp.usage.prompt_tokens or 0)
-        tout = int(resp.usage.completion_tokens or 0)
-        # 取生成 token 的 mean logprob
-        mean_lp = -2.0
-        lp_obj = getattr(resp.choices[0], "logprobs", None)
-        if lp_obj and getattr(lp_obj, "content", None):
-            vals = [
-                t.top_logprobs[0].logprob
-                for t in lp_obj.content
-                if t.top_logprobs
-            ]
-            if vals:
-                mean_lp = sum(vals) / len(vals)
-        lp_comp = _logprob_component(mean_lp)
-    except Exception:
-        # 端点不支持 logprobs 或异常 → 回退：用规则构造一次普通生成
-        resp = client.chat.completions.create(
-            model=model, messages=messages, temperature=0.3, max_tokens=500
+    except openai.OpenAIError:
+        # 兼容端点不支持 logprobs → 回退普通生成（仍走统一配额/超时/重试）
+        text, tin, tout = _deepseek_chat(
+            model, messages, temperature=0.3, max_tokens=500
         )
-        text = resp.choices[0].message.content or ""
-        tin = int(resp.usage.prompt_tokens or 0)
-        tout = int(resp.usage.completion_tokens or 0)
-        lp_comp = 0.5  # 未知 → 取中性
+        mean_lp = None
+
+    lp_comp = _logprob_component(mean_lp) if mean_lp is not None else 0.5
 
     ms = max(int((time.perf_counter() - t0) * 1000), 1)
 

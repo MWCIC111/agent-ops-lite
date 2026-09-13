@@ -5,8 +5,9 @@
 
 排除项（与部署 skill 一致）：
     .git / __pycache__ / *.pyc / .workbuddy / *.db / .env /
-    rag_data/*.pkl / *.bak
-（.env 含 API Key 不进包；agent_ops.db / reviewed.jsonl 为运行时数据，服务器侧保留）
+    rag_data/*.pkl / *.bak / reviewed.jsonl / seed.log / .seed.lock
+（.env 含 API Key 不进包；agent_ops.db / reviewed.jsonl / seed.log / .seed.lock
+  为运行时数据，服务器侧保留）
 
 注意：服务器无法从 GitHub 拉取，部署走"本地 zip → 腾讯云控制台上传 →
 OrcaTerm 解压 → systemctl 重启"。本脚本只负责产出 zip。
@@ -21,7 +22,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 EXCLUDE_DIRS = {".git", "__pycache__", ".workbuddy", ".idea", ".vscode"}
 EXCLUDE_EXTS = {".pyc", ".db", ".pkl", ".bak"}
-EXCLUDE_NAMES = {".env", ".env.example"}
+EXCLUDE_NAMES = {".env", ".env.example", "reviewed.jsonl", "seed.log", ".seed.lock"}
 
 
 def _should_exclude(root: str, name: str) -> bool:

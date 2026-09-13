@@ -25,7 +25,6 @@ CANDIDATES = [
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "research-butler-architecture.html"),
     os.path.join(os.getcwd(), "assets", "research-butler-architecture.html"),
     os.path.join(os.getcwd(), "app", "assets", "research-butler-architecture.html"),
-    "/home/ubuntu/agent-ops-lite/app/assets/research-butler-architecture.html",
 ]
 HTML_PATH = next((p for p in CANDIDATES if os.path.exists(p)), None)
 
