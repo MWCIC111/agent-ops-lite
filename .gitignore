@@ -24,8 +24,11 @@ Thumbs.db
 agent_ops.db
 *.db
 
-# RAG 离线索引缓存（运行时从 docs.jsonl 重建，无需入库）
+# RAG 离线索引缓存（运行时从语料 jsonl 重建，无需入库）
 rag_data/*.pkl
+
+# 语料抓取中间产物（raw_md 原文 + manifest，由 scripts/fetch_ivd_corpus.py 生成，可重新抓取）
+rag_data/_src/
 
 # 人工审核回写数据（运行时生成，不应入库）
 rag_data/reviewed.jsonl

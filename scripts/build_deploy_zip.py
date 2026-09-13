@@ -5,7 +5,8 @@
 
 排除项（与部署 skill 一致）：
     .git / __pycache__ / *.pyc / .workbuddy / *.db / .env /
-    rag_data/*.pkl / *.bak / reviewed.jsonl / seed.log / .seed.lock
+    rag_data/*.pkl / *.bak / reviewed.jsonl / seed.log / .seed.lock /
+    docs_ivd_naive.jsonl（离线消融基线语料）
 （.env 含 API Key 不进包；agent_ops.db / reviewed.jsonl / seed.log / .seed.lock
   为运行时数据，服务器侧保留）
 
@@ -22,7 +23,12 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 EXCLUDE_DIRS = {".git", "__pycache__", ".workbuddy", ".idea", ".vscode"}
 EXCLUDE_EXTS = {".pyc", ".db", ".pkl", ".bak"}
-EXCLUDE_NAMES = {".env", ".env.example", "reviewed.jsonl", "seed.log", ".seed.lock"}
+EXCLUDE_NAMES = {
+    ".env", ".env.example", "reviewed.jsonl", "seed.log", ".seed.lock",
+    # 离线消融基线语料（7.6MB）：只有 scripts/eval_rag.py 做对照时才用，
+    # 服务器上跑 demo 用不到；默认语料是 docs_ivd_section.jsonl。
+    "docs_ivd_naive.jsonl",
+}
 
 
 def _should_exclude(root: str, name: str) -> bool:
