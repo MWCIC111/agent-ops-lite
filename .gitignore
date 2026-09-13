@@ -8,9 +8,12 @@ venv/
 # Streamlit
 .streamlit/secrets.toml
 
-# Secrets
+# Secrets（`.env.example` 是唯一可提交的模板，其余一律忽略）
+# 注意 `*.env` 匹配不到 `.env.local` / `.env.production`，必须显式加 `.env.*`
 .env
 *.env
+.env.*
+!.env.example
 
 # IDE
 .vscode/

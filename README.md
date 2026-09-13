@@ -525,6 +525,9 @@ cd /path/to/agent-ops-lite && python scripts/seed_real_data.py --rag 5 --butler 
 
 ### 环境变量
 
+复制模板后填写：`cp .env.example .env`。脚本类工具（`scripts/*.py`）会自行读取项目根 `.env`，
+**无需手动 `export`**；Streamlit 进程需重启才重新加载。`.env` 及其变体（`.env.local` 等）均已被忽略。
+
 | 变量                         | 默认                            | 说明                       |
 | -------------------------- | ----------------------------- | ------------------------ |
 | `DEEPSEEK_API_KEY`         | —                             | DeepSeek OpenAI 兼容密钥（必填） |
