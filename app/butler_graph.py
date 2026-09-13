@@ -33,6 +33,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 
 from agent_runner import _deepseek_chat, _retrieve_context, _LAST_HITS, collector
+from rag_retriever import corpus_label
 from agent_ops import record_step
 from butler_fusion import fusion_with_confidence, GATE
 from butler_review import add as review_add
@@ -79,7 +80,7 @@ def retrieve_node(state: ButlerState) -> dict:
     ctx, hits = _retrieve_context(state["question"], top_k=4)
     _LAST_HITS[:] = hits
     record_step("共享State · 知识检索", model=state["model"],
-                tool="BM25检索(华佗百科)", tokens_in=0, tokens_out=0, latency_ms=1)
+                tool=f"BM25检索({corpus_label()})", tokens_in=0, tokens_out=0, latency_ms=1)
     return {"context": ctx, "hits": hits}
 
 

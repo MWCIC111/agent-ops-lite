@@ -2,7 +2,7 @@
 
 把所有观测页面统一到「真实数据」后的管理入口：
   - 查看 agent_ops.db 中真实 Trace 的统计（数量 / 各 Agent / 成本 / 最近时间）
-  - 一键播种真实数据（调用 DeepSeek + 华佗百科 RAG，批量落库）
+  - 一键播种真实数据（调用 DeepSeek + BM25 知识库 RAG，批量落库）
   - 清空真实数据（重新播种前用）
 
 所有页面（总览首页 + 12 个功能页面）现在统一读取 agent_ops.db 的真实 Trace；
@@ -24,6 +24,7 @@ sys.path.insert(0, _REPO_ROOT)
 sys.path.insert(0, os.path.join(_REPO_ROOT, "app"))
 
 from agent_ops import SQLiteStore  # noqa: E402
+from rag_retriever import corpus_label  # noqa: E402
 
 DB_PATH = os.path.join(_REPO_ROOT, "agent_ops.db")
 SEED_SCRIPT = os.path.join(_REPO_ROOT, "scripts", "seed_real_data.py")
@@ -81,7 +82,7 @@ else:
 
 # ---------- 2. 一键播种真实数据 ----------
 st.divider()
-st.subheader("🌱 播种真实数据（真实 DeepSeek + 华佗百科 RAG）")
+st.subheader(f"🌱 播种真实数据（真实 DeepSeek + {corpus_label()} RAG）")
 st.markdown(
     "批量跑真实 Agent 问答，每次调用都被 `@trace` 采集并落库，让所有面板都有真实数据可看。"
     "**研发管家为多步编排（每条约 6~7 次 LLM 调用），整体较慢，建议在后台运行。**"

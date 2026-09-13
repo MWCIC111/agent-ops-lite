@@ -7,7 +7,7 @@
 三个场景对应简历项目：
   - 研发管家 · 研发问答：真 LangGraph 集中式多 Agent 编排（Orchestrator + 共享 State +
     4 垂直 Agent 经 Send 扇出 + 置信度融合·三层幻觉抑制 + 低置信转人工回写闭环），每一步 record_step，Trace 出现多节点。
-  - 知源 · RAG 问答：BM25 真实检索（华佗百科知识库）增强生成。
+  - 知源 · RAG 问答：BM25 真实检索（语料见 rag_retriever.corpus_name）增强生成。
   - 通用问答：单步直接调用。
 
 真实运行逻辑抽离在 app/agent_runner.py（UI 与 headless 播种脚本共用）。
@@ -37,31 +37,34 @@ from agent_runner import (  # noqa: E402
     rag_count,
     run_real_agent,
 )
+from rag_retriever import corpus_label  # noqa: E402
 from agent_ops import SQLiteStore  # noqa: E402
 
 DB_PATH = os.path.join(_REPO_ROOT, "agent_ops.db")
 
 SCENARIOS = {
     "研发管家 · 研发问答": "真 LangGraph 集中式多 Agent：Orchestrator + 共享 State + 4 垂直 Agent(Send扇出) + 置信度融合·三层幻觉抑制 + 低置信转人工回写闭环",
-    "知源 · RAG 问答": "检索增强生成（BM25 · 华佗百科知识库）",
+    "知源 · RAG 问答": f"检索增强生成（BM25 · {corpus_label()}）",
     "通用问答": "单步直接调用",
 }
 
-# 每个场景对应的示例提问，按所选场景动态展示，点击即填入提问框
+# 每个场景对应的示例提问，按所选场景动态展示，点击即填入提问框。
+# 「知源」用能命中当前语料的口语化问题；「研发管家」用 IVD 研发场景问题，
+# 使检索 -> 4 Agent 协作 -> 置信度融合整条链路都被真实演示到。
 EXAMPLE_QUESTIONS = {
     "研发管家 · 研发问答": [
-        "如何设计多 Agent 的共享状态？",
-        "抗原设计阶段如何抑制模型幻觉？",
-        "研发管家的置信度融合策略怎么实现？",
-        "方案规划 Agent 和故障诊断 Agent 如何协作？",
-        "如何评估一个 IVD 研发 Agent 系统的可靠性？",
+        "抗原表达量低，可能的原因和优化方向有哪些？",
+        "设计一个测降钙素原的化学发光试剂，研发方案该怎么规划？",
+        "某批次试剂盒批间差过大，如何定位故障并改进？",
+        "抗原设计阶段如何降低脱靶（交叉反应）风险？",
+        "从靶点确认到试剂盒定型，整体研发流程分哪几个阶段？",
     ],
     "知源 · RAG 问答": [
-        "糖尿病应该怎么控制饮食？",
-        "高血压患者日常需要注意什么？",
-        "幽门螺杆菌感染应该怎么治疗？",
-        "甲状腺结节需要做手术吗？",
-        "感冒了应该多喝水还是吃维生素 C？",
+        "体外诊断试剂稳定性研究需要提供哪些资料？",
+        "申请注册时，说明书里必须写清楚哪些内容？",
+        "最低检测限怎么确定和验证？",
+        "试剂的批间差怎么控制，精密度指标怎么定？",
+        "临床试验的样本量怎么估算？",
     ],
     "通用问答": [
         "用一句话解释什么是大语言模型",
@@ -80,11 +83,11 @@ st.caption("调用 DeepSeek 真实大模型，经 @trace 采集真实 token / �
 
 # 提问框初始值（示例问题点击后会被覆盖）
 if "question_input" not in st.session_state:
-    st.session_state.question_input = "如何设计多 Agent 的共享状态？"
+    st.session_state.question_input = EXAMPLE_QUESTIONS["研发管家 · 研发问答"][0]
 
 
 # ------------------- UI -------------------
-st.info(f"当前端点：{OPENAI_BASE_URL} ｜ 默认模型：{DEFAULT_MODEL} ｜ 知识库：华佗百科（{rag_count()} 条）")
+st.info(f"当前端点：{OPENAI_BASE_URL} ｜ 默认模型：{DEFAULT_MODEL} ｜ 知识库：{corpus_label()}（{rag_count()} 条）")
 model = st.text_input("模型名", value=DEFAULT_MODEL,
                       help="例如 deepseek-chat、deepseek-reasoner；需在 .env 中已配置 DEEPSEEK_API_KEY")
 scenario = st.selectbox("场景（对应简历项目）", list(SCENARIOS.keys()),
@@ -120,7 +123,7 @@ if st.button("运行真实 Agent", type="primary"):
                 st.subheader("回答")
                 st.markdown(answer)
                 if _LAST_HITS:
-                    st.subheader("检索依据（BM25 · 华佗百科）")
+                    st.subheader(f"检索依据（BM25 · {corpus_label()}）")
                     for h in _LAST_HITS:
                         with st.expander(f"▸ {h['title']}（score={h['score']:.2f}）"):
                             st.caption(h["source"])

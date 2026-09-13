@@ -1,6 +1,6 @@
 """agent_runner.py — 真实 Agent 运行器（headless，无 streamlit 依赖）
 
-把 8_真实Agent.py 里「调 DeepSeek + 华佗百科 RAG」的核心逻辑抽离到这里，
+把 8_真实Agent.py 里「调 DeepSeek + BM25 知识库 RAG」的核心逻辑抽离到这里，
 供两类调用方复用：
   1. 8_真实Agent.py（Streamlit UI 页）—— 用户手动提问，现场演示真实调用。
   2. scripts/seed_real_data.py（headless 播种脚本）—— 批量跑真实问答，
@@ -29,7 +29,7 @@ for _p in (_REPO_ROOT, _APP_DIR):
 
 from agent_ops import Collector, record_step, trace, SQLiteStore  # noqa: E402
 from agent_ops.cost import MODEL_PRICE, USD_TO_CNY  # noqa: E402
-from rag_retriever import retrieve, count as rag_count  # noqa: E402
+from rag_retriever import retrieve, count as rag_count, corpus_label  # noqa: E402
 
 # 最近一次检索命中片段（供 UI 展示），模块级缓存。
 _LAST_HITS: list = []
@@ -195,7 +195,7 @@ def chat_with_logprobs(model: str, messages: list, temperature: float = 0.3,
 
 
 def _retrieve_context(question: str, top_k: int = 3) -> tuple[str, list]:
-    """真实 BM25 检索（华佗百科知识库），返回拼接 context 与命中片段列表。"""
+    """真实 BM25 检索（当前语料见 rag_retriever.corpus_label），返回拼接 context 与命中片段列表。"""
     hits = retrieve(question, top_k=top_k)
     ctx = "\n\n".join(f"【{h['title']}】{h['content']}" for h in hits)
     return ctx, hits
@@ -235,7 +235,7 @@ def run_zhiyuan(question: str, model: str) -> str:
     MODEL_PRICE.setdefault(model, (0.0, 0.0))
     ctx, hits, rms = _timed(lambda: _retrieve_context(question, 3))
     _LAST_HITS[:] = hits
-    record_step("知识检索", model=model, tool="BM25检索(华佗百科)",
+    record_step("知识检索", model=model, tool=f"BM25检索({corpus_label()})",
                 tokens_in=0, tokens_out=0, latency_ms=rms)
     messages = [
         {"role": "system", "content": "你是企业知识库助手，仅基于检索依据作答。"},

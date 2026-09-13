@@ -67,6 +67,22 @@ def corpus_path() -> str:
     return os.path.join(_REPO_ROOT, "rag_data", _CORPORA[name])
 
 
+# 语料名 → 人类可读标签（UI / Trace 展示用）。
+# 放在数据源模块里作为**唯一真源**：换 RAG_CORPUS 时，页面文案与 Trace 工具名自动跟着变，
+# 避免"数据源换了、展示层没跟"的漂移。
+_CORPUS_LABEL = {
+    "ivd": "IVD 器审指导原则",
+    "ivd_naive": "IVD 器审指导原则（朴素切分）",
+    "general": "华佗百科（对照域）",
+}
+
+
+def corpus_label(name: str | None = None) -> str:
+    """当前（或指定）语料的人类可读名；未登记的取值原样返回（可能是 jsonl 路径）。"""
+    name = name or corpus_name()
+    return _CORPUS_LABEL.get(name, name)
+
+
 def _reviewed_mtime() -> float | None:
     """reviewed.jsonl 的 mtime（不存在返回 None）。用作缓存失效探针。"""
     try:
