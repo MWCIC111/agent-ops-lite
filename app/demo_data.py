@@ -23,7 +23,7 @@ if _REPO_ROOT not in sys.path:
 from agent_ops import MODEL_PRICE, Step, Trace  # noqa: E402
 from agent_ops.storage import SQLiteStore  # noqa: E402
 
-random.seed(42)
+_rng = random.Random(42)
 
 # ---------------- 基础配置 ----------------
 
@@ -48,30 +48,30 @@ STEP_TEMPLATES = [
 
 def _gen_step(template: tuple[str, str, str | None], fail: bool) -> Step:
     name, model, tool = template
-    tok_in = random.randint(200, 1200)
-    tok_out = random.randint(100, 800)
-    latency = random.randint(150, 3000)
+    tok_in = _rng.randint(200, 1200)
+    tok_out = _rng.randint(100, 800)
+    latency = _rng.randint(150, 3000)
     if fail:
         return Step(name, model, tool, tok_in, tok_out, latency, "error",
-                    error=random.choice(["工具超时", "响应格式错误", "限流触发"]))
+                    error=_rng.choice(["工具超时", "响应格式错误", "限流触发"]))
     return Step(name, model, tool, tok_in, tok_out, latency, "success")
 
 
 def _gen_trace(at: datetime) -> Trace:
-    trace_id = "".join(random.choices("0123456789abcdef", k=8))
-    agent = random.choice(AGENTS)
-    n_steps = random.randint(3, 8)
+    trace_id = "".join(_rng.choices("0123456789abcdef", k=8))
+    agent = _rng.choice(AGENTS)
+    n_steps = _rng.randint(3, 8)
     steps: list[Step] = []
     failed = False
     for i in range(n_steps):
-        template = random.choice(STEP_TEMPLATES)
+        template = _rng.choice(STEP_TEMPLATES)
         # 每步约 6% 概率失败；失败后重试一次（模拟生产的重试机制）
-        fail = random.random() < 0.06 and not failed
+        fail = _rng.random() < 0.06 and not failed
         steps.append(_gen_step(template, fail))
         if fail:
             failed = True
             steps.append(_gen_step(template, False))
-    status = "failed" if failed and random.random() < 0.5 else "success"
+    status = "failed" if failed and _rng.random() < 0.5 else "success"
     trace = Trace(trace_id, agent, at, steps, status)
     trace.summarize()  # 聚合统计（复用核心库逻辑，未知模型按 0 价，安全）
     return trace
@@ -91,12 +91,13 @@ def load_demo_traces(days: int = 14, n: int = 2000) -> list[Trace]:
 
     注：新版统一数据源为 load_traces()（真实优先）。本函数保留作兜底/兼容。
     """
+    _rng.seed(42)
     now = datetime.now()
     traces = []
     for _ in range(n):
         at = now - timedelta(
-            minutes=random.randint(0, days * 24 * 60),
-            seconds=random.randint(0, 59),
+            minutes=_rng.randint(0, days * 24 * 60),
+            seconds=_rng.randint(0, 59),
         )
         traces.append(_gen_trace(at))
     traces.sort(key=lambda t: t.started_at, reverse=True)
@@ -125,12 +126,13 @@ def load_traces() -> tuple[list[Trace], str]:
     if real:
         return real, "real"
     # 兜底：数据库为空，生成可复现模拟数据
+    _rng.seed(42)
     now = datetime.now()
     traces = []
     for _ in range(2000):
         at = now - timedelta(
-            minutes=random.randint(0, 14 * 24 * 60),
-            seconds=random.randint(0, 59),
+            minutes=_rng.randint(0, 14 * 24 * 60),
+            seconds=_rng.randint(0, 59),
         )
         traces.append(_gen_trace(at))
     traces.sort(key=lambda t: t.started_at, reverse=True)

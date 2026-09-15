@@ -93,6 +93,16 @@ def approve(rid: str, answer: str) -> bool:
             if row is None:
                 return False
             query = row[0]
+            # 先落 jsonl 再更新 SQLite：文件写失败时抛异常，DB 保持 pending，避免半提交。
+            os.makedirs(os.path.dirname(REVIEWED_PATH), exist_ok=True)
+            with open(REVIEWED_PATH, "a", encoding="utf-8") as f:
+                rec = {
+                    "title": "人工审核补充",
+                    "content": f"问：{query}\n答：{answer}",
+                    "source": "人工回写",
+                }
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+                f.flush()
             conn.execute(
                 "UPDATE butler_reviews SET status='approved', answer=?, reviewed_at=? "
                 "WHERE id=?",
@@ -101,14 +111,4 @@ def approve(rid: str, answer: str) -> bool:
             conn.commit()
         finally:
             conn.close()
-    # 写回检索库（追加一行，rag_retriever 启动时已加载）
-    os.makedirs(os.path.dirname(REVIEWED_PATH), exist_ok=True)
-    with _lock:
-        with open(REVIEWED_PATH, "a", encoding="utf-8") as f:
-            rec = {
-                "title": "人工审核补充",
-                "content": f"问：{query}\n答：{answer}",
-                "source": "人工回写",
-            }
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     return True

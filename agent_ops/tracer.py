@@ -20,7 +20,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from .cost import MODEL_PRICE
+from .cost import ensure_price
 
 # ---------------------------------------------------------------------------
 # 数据结构 —— 与 app/demo_data.py 的 Step / Trace 字段完全一致
@@ -69,7 +69,7 @@ class Trace:
         self.latency_ms = sum(s.total_latency() for s in self.steps)
 
         def step_cost(s: Step) -> float:
-            price = MODEL_PRICE.get(s.model, (0.0, 0.0))  # 未知模型按 0 价，避免 KeyError
+            price = ensure_price(s.model)
             return (
                 (s.tokens_in * price[0] + s.tokens_out * price[1]) / 1000
                 + sum(step_cost(c) for c in s.children)

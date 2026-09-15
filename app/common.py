@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 
-import streamlit.components.v1 as components
+import streamlit as st
 from op_log import log_operation
 
 
@@ -13,7 +13,7 @@ def show_clock():
 
     取的是访问者浏览器本地时间，即「操作人员当下操作的现实时间」。
     """
-    components.html(
+    st.iframe(
         """
         <div id="liveclock"
              style="font-size:13px;color:#8a8a8a;font-family:ui-monospace,Menlo,Consolas,monospace;"></div>

@@ -43,7 +43,7 @@ def log_operation(page: str, action: str, detail: str = "",
         pass
 
 
-def load_operations(limit: int = 200):
+def load_operations(limit: int | None = 200):
     """读取最近 limit 条操作记录（旧->新）。"""
     if not os.path.exists(_LOG_PATH):
         return []
@@ -60,4 +60,4 @@ def load_operations(limit: int = 200):
                     continue
     except Exception:
         return []
-    return out[-limit:]
+    return out if limit is None else out[-limit:]

@@ -8,7 +8,6 @@
 import os
 
 import streamlit as st
-from streamlit.components.v1 import html as st_html
 
 from common import show_clock, page_visit
 
@@ -38,7 +37,7 @@ if HTML_PATH is None:
 with open(HTML_PATH, encoding="utf-8") as f:
     archify_html = f.read()
 
-st_html(archify_html, height=860, scrolling=True)
+st.iframe(archify_html, height=860)
 
 with open(HTML_PATH, "rb") as f:
     st.download_button(

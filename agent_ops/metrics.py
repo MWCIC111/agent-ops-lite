@@ -9,7 +9,7 @@ import statistics
 from datetime import datetime
 from typing import Any
 
-from .cost import MODEL_PRICE
+from .cost import ensure_price
 from .tracer import Collector, Trace, get_collector
 
 
@@ -64,7 +64,7 @@ def model_usage(collector: Collector | None = None) -> dict[str, dict[str, float
             usage[m]["tokens_in"] += s.tokens_in
             usage[m]["tokens_out"] += s.tokens_out
             usage[m]["tokens"] += s.tokens_in + s.tokens_out
-            price = MODEL_PRICE.get(s.model, (0.0, 0.0))  # 未知模型兜底，避免 KeyError
+            price = ensure_price(s.model)
             usage[m]["cost_usd"] += (
                 s.tokens_in * price[0] + s.tokens_out * price[1]
             ) / 1000

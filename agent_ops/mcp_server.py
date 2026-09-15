@@ -218,14 +218,14 @@ class MCPAgentOpsServer:
         # 注意：traces_to_rows 签名是 (traces=None, collector=None)，必须用关键字参数
         rows = traces_to_rows(collector=self._collector)
         if limit is not None:
-            rows = rows[-int(limit):]
+            rows = rows[: int(limit)]
         return _to_jsonable(rows)
 
     def _tool_history(self, db_path: str = "agent_ops.db", limit: int | None = None) -> list:
         store = SQLiteStore(db_path)
         traces = store.load()
         if limit is not None:
-            traces = traces[-int(limit):]
+            traces = traces[: int(limit)]
         return _to_jsonable(traces)
 
     def _tool_check_alerts(

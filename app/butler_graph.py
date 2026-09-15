@@ -77,10 +77,10 @@ def _timed(fn):
 
 
 def retrieve_node(state: ButlerState) -> dict:
-    ctx, hits = _retrieve_context(state["question"], top_k=4)
+    ctx, hits, rms = _timed(lambda: _retrieve_context(state["question"], top_k=4))
     _LAST_HITS[:] = hits
     record_step("共享State · 知识检索", model=state["model"],
-                tool=f"BM25检索({corpus_label()})", tokens_in=0, tokens_out=0, latency_ms=1)
+                tool=f"BM25检索({corpus_label()})", tokens_in=0, tokens_out=0, latency_ms=rms)
     return {"context": ctx, "hits": hits}
 
 
@@ -132,10 +132,11 @@ def vertical_node(state: ButlerState) -> dict:
 def record_agents_node(state: ButlerState) -> dict:
     """按固定字典序落 4 步 Trace（保证前 7 步顺序确定性；低置信时另有第 8 步入审核队列）。"""
     by_name = {r["name"]: r for r in state["agent_results"]}
+    wall_ms = max((r.get("ms", 1) for r in state["agent_results"]), default=1)
     for name, _ in BUTLER_AGENTS.items():
         r = by_name.get(name, {"ans": "", "tin": 0, "tout": 0, "ms": 1})
         record_step(name, model=state["model"], tool="垂直Agent·DeepSeek",
-                    tokens_in=r["tin"], tokens_out=r["tout"], latency_ms=r["ms"])
+                    tokens_in=r["tin"], tokens_out=r["tout"], latency_ms=wall_ms)
     return {}
 
 
@@ -161,6 +162,7 @@ def fusion_node(state: ButlerState) -> dict:
     ]
     need_human = False
     review_id = None
+    review_ms = 1
     if reviewed_hits:
         # 人工审核知识命中 → 直接采信（数据飞轮闭环的高可信来源）
         content = reviewed_hits[0].get("content", "")
@@ -175,7 +177,9 @@ def fusion_node(state: ButlerState) -> dict:
         )
         need_human = confidence < GATE
         if need_human:
+            t0 = time.perf_counter()
             review_id = review_add(state["question"], text, confidence)
+            review_ms = max(int((time.perf_counter() - t0) * 1000), 1)
         note = "（低于阈值，已转人工审核队列）" if need_human else ""
 
     record_step("置信度融合 · 三层幻觉抑制", model=state["model"],
@@ -186,12 +190,14 @@ def fusion_node(state: ButlerState) -> dict:
         + f"\n\n> 置信度：{confidence:.2f}" + (f" {note}" if note else "")
     )
     return {"fusion_text": text, "confidence": confidence,
-            "need_human": need_human, "review_id": review_id, "answer": full}
+            "need_human": need_human, "review_id": review_id,
+            "review_ms": review_ms, "answer": full}
 
 
 def human_review_node(state: ButlerState) -> dict:
     record_step("人工审核回写 · 已转人工队列", model=state["model"],
-                tool="review_queue", tokens_in=0, tokens_out=0, latency_ms=1)
+                tool="review_queue", tokens_in=0, tokens_out=0,
+                latency_ms=state.get("review_ms", 1))
     return {}
 
 

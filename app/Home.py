@@ -32,7 +32,7 @@ rows = [
         "trace_id": t.trace_id,
         "agent": t.agent,
         "time": t.started_at,
-        "date": t.started_at.strftime("%m-%d"),
+        "date": t.started_at.strftime("%Y-%m-%d"),
         "status": t.status,
         "tokens": t.tokens,
         "latency_ms": t.latency_ms,
@@ -109,7 +109,7 @@ if live:
                 "trace_id": f"rt-{now:%H%M%S}-{i:02d}",
                 "agent": agent,
                 "time": now,
-                "date": now.strftime("%m-%d"),
+                "date": now.strftime("%Y-%m-%d"),
                 "status": status,
                 "tokens": tokens,
                 "latency_ms": latency_ms,
@@ -165,7 +165,7 @@ if live:
 # ============================================================
 else:
     # 4 个 KPI
-    today = df["date"].max()
+    today = datetime.now().strftime("%Y-%m-%d")
     today_df = df[df["date"] == today]
 
     c1, c2, c3, c4 = st.columns(4)
@@ -173,18 +173,6 @@ else:
     c2.metric("Token 消耗", f"{today_df['tokens'].sum() / 1e6:.2f}M")
     c3.metric("今日成本", f"¥{today_df['cost'].sum():.4f}")
     c4.metric("平均延迟", f"{df['latency_ms'].mean() / 1000:.2f}s")
-
-    # 真实 Trace 聚合（仅模拟模式下若存在真实落库 Trace，单独高亮）
-    if mode == "mock":
-        REAL_AGENTS = {"研发管家 · 多Agent编排", "知源 · RAG问答", "通用问答 · DeepSeek"}
-        real_df = df[df["agent"].isin(REAL_AGENTS)]
-        if not real_df.empty:
-            st.subheader("今日真实调用（来自 agent_ops.db）")
-            r1, r2, r3, r4 = st.columns(4)
-            r1.metric("真实调用量", f"{len(real_df):,}")
-            r2.metric("真实 Token", f"{real_df['tokens'].sum():,}")
-            r3.metric("真实成本", f"¥{real_df['cost'].sum():.3f}")
-            r4.metric("平均延迟", f"{real_df['latency_ms'].mean() / 1000:.2f}s")
 
     # 近 14 天调用量趋势
     st.subheader("近 14 天调用量趋势")
@@ -196,6 +184,7 @@ else:
         yaxis_title="调用量",
         xaxis_title="",
     )
+    fig.update_xaxes(type="category")
     st.plotly_chart(fig, width="stretch")
 
     # 最新 Trace

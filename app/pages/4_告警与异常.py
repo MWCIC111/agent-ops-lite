@@ -35,7 +35,7 @@ rows = [
         "trace_id": t.trace_id,
         "agent": t.agent,
         "time": t.started_at,
-        "date": t.started_at.strftime("%m-%d"),
+        "date": t.started_at.strftime("%Y-%m-%d"),
         "status": t.status,
         "latency_ms": t.latency_ms,
     }
@@ -89,6 +89,7 @@ fig.add_hline(y=0.15, line_dash="dash", line_color="#F09595",
               annotation_text="阈值 15%", annotation_position="top right")
 fig.update_layout(height=320, margin=dict(t=10, b=10, l=10, r=10),
                   xaxis_title="", yaxis_title="错误率")
+fig.update_xaxes(type="category")
 st.plotly_chart(fig, width="stretch")
 
 # ---- 失败 Trace 列表 ----

@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import os
 import random
+import subprocess
 import sys
 import time
 from datetime import datetime, timedelta
@@ -42,27 +43,12 @@ for _p in (_REPO_ROOT, _APP_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from env_loader import load_dotenv  # noqa: E402
+
 LOCK_FILE = os.path.join(_REPO_ROOT, ".seed.lock")
 
 
-def _load_dotenv() -> None:
-    """从项目根 .env 注入环境变量（不依赖 python-dotenv）。"""
-    dotenv = os.path.join(_REPO_ROOT, ".env")
-    if not os.path.exists(dotenv):
-        return
-    with open(dotenv, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip().strip('"').strip("'")
-            if key and os.environ.get(key) is None:
-                os.environ[key] = value
-
-
-_load_dotenv()
+load_dotenv()
 
 import agent_runner  # noqa: E402
 
@@ -189,15 +175,22 @@ def _run(scenario: str, query: str, model: str, spread_days: int, backdate_on: b
 
 
 def _pid_alive(pid: int) -> bool:
-    """POSIX 下探测进程是否存活；其他平台保守视为存活。"""
+    """探测进程是否存活：POSIX 用 os.kill，Windows 用 tasklist。"""
     if pid <= 0:
         return False
-    if os.name != "posix":
-        return True
+    if os.name == "posix":
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
     try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
+        out = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+        return str(pid) in out
+    except Exception:
         return False
 
 

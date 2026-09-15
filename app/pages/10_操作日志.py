@@ -27,12 +27,13 @@ page_visit("操作日志")
 st.caption("记录操作人员在各页面的真实操作时间（取访问者本地时间）。"
            "每次运行真实 Agent、播种、清空数据，以及访问页面，都会留下时间戳，便于演示与审计追踪。")
 
-ops = load_operations(200)
+all_ops = load_operations(None)
+ops = all_ops[-200:]
 if not ops:
     st.info("暂无操作记录。访问任意页面或运行一次真实 Agent 后，这里会出现时间线。"
             "（operations.log 位于仓库根目录）")
 else:
-    st.metric("累计操作次数", len(ops))
+    st.metric("累计操作次数", len(all_ops))
     c1, c2 = st.columns(2)
     c1.metric("最早记录", ops[0]["ts"])
     c2.metric("最近记录", ops[-1]["ts"])
@@ -46,4 +47,4 @@ else:
         }
         for o in ops
     ]
-    st.dataframe(rows, hide_index=True, use_container_width=True)
+    st.dataframe(rows, hide_index=True, width="stretch")

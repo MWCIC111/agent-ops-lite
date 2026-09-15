@@ -13,6 +13,7 @@ import pandas as pd
 import plotly.express as px
 
 import sys, os
+from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from shared_state import init as sim_init, get as sim_get
 
@@ -36,7 +37,7 @@ rows = [
         "agent": t.agent,
         "cost": t.cost_usd * 7.2,
         "tokens": t.tokens,
-        "date": t.started_at.strftime("%m-%d"),
+        "date": t.started_at.strftime("%Y-%m-%d"),
     }
     for t in traces
 ]
@@ -57,6 +58,7 @@ with c2:
                    color_discrete_sequence=["#D85A30"])
     fig2.update_layout(height=340, margin=dict(t=10, b=10, l=10, r=10),
                        title="每日成本趋势", xaxis_title="", yaxis_title="成本(¥)")
+    fig2.update_xaxes(type="category")
     st.plotly_chart(fig2, width="stretch")
 
 # ---- 成本配额熔断（真实拦截，Phase 1b）----
@@ -68,7 +70,7 @@ quota = st.slider("每日成本配额（¥，演示用阈值）", min_value=10, 
                   value=int(min(quota_env, 200)), step=5,
                   help="真实调用拦截以服务端环境变量 AGENTOPS_DAILY_QUOTA_CNY 为准"
                        "（_deepseek_chat 入口统一校验）。此滑杆仅用于本页 what-if 演示。")
-today = df["date"].max()
+today = datetime.now().strftime("%Y-%m-%d")
 today_cost = df[df["date"] == today]["cost"].sum()
 
 # 熔断结果写入全局共享状态（首页横幅会同步感知）

@@ -22,13 +22,26 @@ if mode == "real":
     st.success("🟢 真实数据：工具调用来自真实 Agent 运行（BM25 检索 / 垂直 Agent 等）。")
 else:
     st.warning("🟡 模拟数据：数据库为空，当前为可复现模拟数据。播种真实数据后自动切换。")
+
+
+def iter_tool_steps(steps):
+    for s in steps:
+        if s.tool:
+            yield s
+        yield from iter_tool_steps(s.children)
+
+
 rows = []
 for t in traces:
-    for s in t.steps:
-        if s.tool:
-            rows.append(
-                {"tool": s.tool, "status": s.status, "latency_ms": s.latency_ms}
-            )
+    for s in iter_tool_steps(t.steps):
+        rows.append(
+            {"tool": s.tool, "status": s.status, "latency_ms": s.latency_ms}
+        )
+
+if not rows:
+    st.info("当前 Trace 中没有 Function Calling 工具步骤；运行一次包含工具调用的 Agent 后，这里会显示工具维度统计。")
+    st.stop()
+
 df = pd.DataFrame(rows)
 
 agg = (
@@ -42,7 +55,7 @@ agg = (
 )
 agg["成功率"] = (agg["成功次数"] / agg["调用次数"]).map("{:.1%}".format)
 agg["平均耗时s"] = (agg["平均耗时ms"] / 1000).round(2)
-agg = agg.rename(columns={"tool": "工具", "latency_ms": "latency_ms"})
+agg = agg.rename(columns={"tool": "工具"})
 
 c1, c2 = st.columns(2)
 with c1:

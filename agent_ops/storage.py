@@ -160,6 +160,20 @@ class SQLiteStore:
                 )
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_traces_agent ON traces(agent)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_traces_started ON traces(started_at)")
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS butler_reviews (
+                        id          TEXT PRIMARY KEY,
+                        query       TEXT NOT NULL,
+                        draft       TEXT,
+                        confidence  REAL,
+                        status      TEXT NOT NULL DEFAULT 'pending',
+                        answer      TEXT,
+                        created_at  TEXT,
+                        reviewed_at TEXT
+                    )
+                    """
+                )
                 conn.commit()
             finally:
                 conn.close()
@@ -195,7 +209,7 @@ class SQLiteStore:
             conn = sqlite3.connect(self._db_path)
             try:
                 conn.row_factory = sqlite3.Row
-                rows = conn.execute("SELECT data FROM traces ORDER BY started_at").fetchall()
+                rows = conn.execute("SELECT data FROM traces ORDER BY started_at DESC").fetchall()
             finally:
                 conn.close()
         return [dict_to_trace(json.loads(r["data"])) for r in rows]
@@ -205,6 +219,7 @@ class SQLiteStore:
             conn = sqlite3.connect(self._db_path)
             try:
                 conn.execute("DELETE FROM traces")
+                conn.execute("DELETE FROM butler_reviews")
                 conn.commit()
             finally:
                 conn.close()

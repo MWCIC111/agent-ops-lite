@@ -41,12 +41,21 @@ def _seed_lock_alive() -> bool:
             pid = int(f.read().strip() or "0")
     except (OSError, ValueError):
         return False
-    if pid <= 0 or os.name != "posix":
-        return True
+    if pid <= 0:
+        return False
+    if os.name == "posix":
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
     try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
+        out = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+        return str(pid) in out
+    except Exception:
         return False
 
 
@@ -139,10 +148,10 @@ if os.path.exists(SEED_LOG):
 # ---------- 3. 清空真实数据（危险操作） ----------
 st.divider()
 st.subheader("⚠️ 清空真实数据")
-st.caption("仅在需要重新播种时使用。会删除 agent_ops.db 中所有真实 Trace（模拟兜底不受影响）。")
-if st.checkbox("我确认要清空 agent_ops.db 中的所有真实 Trace"):
+st.caption("仅在需要重新播种时使用。会删除 agent_ops.db 中所有真实 Trace 与人工审核队列（模拟兜底不受影响）。")
+if st.checkbox("我确认要清空 agent_ops.db 中的所有真实 Trace 与人工审核队列"):
     if st.button("🗑️ 确认清空", type="primary"):
         SQLiteStore(DB_PATH).clear()
-        st.success("已清空。刷新后所有页面将回退为模拟数据，可重新播种。")
-        log_operation("数据管理", "清空数据", "已删除 agent_ops.db 全部真实 Trace")
+        st.success("已清空真实 Trace 与人工审核队列。刷新后所有页面将回退为模拟数据，可重新播种。")
+        log_operation("数据管理", "清空数据", "已删除 agent_ops.db 全部真实 Trace 与人工审核队列")
         st.rerun()

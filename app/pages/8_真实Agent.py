@@ -142,7 +142,7 @@ traces = SQLiteStore(DB_PATH).load()
 if not traces:
     st.caption("暂无真实调用记录，运行上方按钮后将出现在此处。")
 else:
-    t = traces[-1]
+    t = traces[0]
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Agent", t.agent)
     c2.metric("状态", "成功" if t.status == "success" else "失败")
@@ -156,5 +156,5 @@ else:
         }
         for s in t.steps
     ]
-    st.dataframe(rows, hide_index=True, use_container_width=True)
+    st.dataframe(rows, hide_index=True, width="stretch")
     st.caption(f"共 {len(traces)} 条真实 Trace 已落库")

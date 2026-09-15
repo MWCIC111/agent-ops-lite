@@ -18,7 +18,9 @@ from __future__ import annotations
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _REPO_ROOT)
+sys.path.insert(0, os.path.join(_REPO_ROOT, "app"))
 
 # Windows 默认 GBK 控制台无法打印 ✅/❌：统一强制 UTF-8 输出。
 if hasattr(sys.stdout, "reconfigure"):
@@ -41,6 +43,7 @@ from agent_ops import (
     trace,
     traces_to_rows,
 )
+from agent_ops.cost import ensure_price
 from agent_ops.mcp_server import (
     MCPAgentOpsServer,
     PROTOCOL_VERSION,
@@ -224,6 +227,7 @@ def main() -> None:
 
     import tempfile
     import os as _os
+    import sqlite3
 
     tmpdir = tempfile.mkdtemp(prefix="agentops_sqlite_")
     db_path = _os.path.join(tmpdir, "test_ops.db")
@@ -254,6 +258,42 @@ def main() -> None:
           and loaded[0].steps[0].children[0].tokens_in == 150)
     check("聚合值还原", loaded[0].tokens == 300 and loaded[0].cost_usd == 0.012)
     check("trace_to_dict 往返一致", dict_to_trace(trace_to_dict(tr)).trace_id == "abc123")
+
+    # 10.1b load() 按 started_at 倒序（最新在前），调用方按 traces[0] 取最新
+    order_db = _os.path.join(tmpdir, "order_ops.db")
+    order_store = SQLiteStore(order_db)
+    tr_old = Trace(
+        trace_id="old001", agent="旧 Agent", started_at=_dt(2026, 8, 23, 9, 0, 0),
+        status="success", tokens=1, latency_ms=10, cost_usd=0.001,
+        steps=[Step("旧调用", "qwen-plus", None, 1, 0, 10, "success")],
+    )
+    order_store.save(tr)
+    order_store.save(tr_old)
+    loaded2 = order_store.load()
+    check("load() 最新 Trace 在前", len(loaded2) == 2
+          and loaded2[0].trace_id == "abc123" and loaded2[1].trace_id == "old001",
+          f"got {[t.trace_id for t in loaded2]}")
+
+    # 10.1c 清库同时清理人工审核队列（butler_reviews 与 traces 同库）
+    import butler_review as br_mod
+
+    review_db = _os.path.join(tmpdir, "review_ops.db")
+    review_jsonl = _os.path.join(tmpdir, "reviewed.jsonl")
+    br_mod.DB_PATH = review_db
+    br_mod.REVIEWED_PATH = review_jsonl
+    rid = br_mod.add("测试问题", "草稿", 0.4)
+    check("审核队列 pending 入队", br_mod.pending()[0]["id"] == rid)
+    check("审核通过后状态 approved", br_mod.approve(rid, "审核答案") is True
+          and br_mod.pending() == [])
+    br_mod.DB_PATH = review_db
+    br_mod.REVIEWED_PATH = review_jsonl
+    SQLiteStore(review_db).clear()
+    conn = sqlite3.connect(review_db)
+    try:
+        n_review = conn.execute("SELECT COUNT(*) FROM butler_reviews").fetchone()[0]
+    finally:
+        conn.close()
+    check("clear() 清空人工审核队列", n_review == 0, f"got {n_review}")
 
     # 10.2 Collector(storage=...) 集成：add 自动落库（同 trace_id 幂等覆盖，新 trace_id 追加）
     tr2 = Trace(
@@ -422,6 +462,8 @@ def main() -> None:
     check("Trace 字段与面板一致", fields(Trace) == fields(DemoTrace),
           f"agent_ops={fields(Trace)} demo={fields(DemoTrace)}")
     check("模型单价与面板一致", MODEL_PRICE == DEMO_PRICE)
+    check("deepseek-reasoner 已配置单价", MODEL_PRICE.get("deepseek-reasoner") == (0.00028, 0.00112))
+    check("未知模型 ensure_price 兜底 0 价", ensure_price("__unknown_model__") == (0.0, 0.0))
 
     # ---------- 7. 韧性层新增：storage 真实日成本 / 最新 Trace 时间（零依赖）----------
     print("== 韧性层：storage 真实成本查询 ==")

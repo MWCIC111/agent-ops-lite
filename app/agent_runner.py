@@ -27,8 +27,12 @@ for _p in (_REPO_ROOT, _APP_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from env_loader import load_dotenv  # noqa: E402
+
+load_dotenv()
+
 from agent_ops import Collector, record_step, trace, SQLiteStore  # noqa: E402
-from agent_ops.cost import MODEL_PRICE, USD_TO_CNY  # noqa: E402
+from agent_ops.cost import USD_TO_CNY, ensure_price  # noqa: E402
 from rag_retriever import retrieve, count as rag_count, corpus_label  # noqa: E402
 
 # 最近一次检索命中片段（供 UI 展示），模块级缓存。
@@ -223,7 +227,7 @@ def run_research_butler(question: str, model: str) -> str:
     底层委托 app/butler_graph.run_butler，复用本模块的 _deepseek_chat / _retrieve_context，
     保持返回 str 与 7 步基础 Trace 顺序；低置信时追加人工审核回写步（共 8 步）。
     """
-    MODEL_PRICE.setdefault(model, (0.0, 0.0))
+    ensure_price(model)
     from butler_graph import run_butler  # 惰性导入，避免循环依赖
     res = run_butler(question, model)
     return res["answer"]
@@ -232,7 +236,7 @@ def run_research_butler(question: str, model: str) -> str:
 @trace(agent="知源 · RAG问答", collector=collector)
 def run_zhiyuan(question: str, model: str) -> str:
     """知源：BM25 真实检索 -> 生成 -> （演示用不含校验，保持轻量）。"""
-    MODEL_PRICE.setdefault(model, (0.0, 0.0))
+    ensure_price(model)
     ctx, hits, rms = _timed(lambda: _retrieve_context(question, 3))
     _LAST_HITS[:] = hits
     record_step("知识检索", model=model, tool=f"BM25检索({corpus_label()})",
@@ -249,7 +253,7 @@ def run_zhiyuan(question: str, model: str) -> str:
 @trace(agent="通用问答 · DeepSeek", collector=collector)
 def run_general(question: str, model: str) -> str:
     """通用问答：单步直接调用。"""
-    MODEL_PRICE.setdefault(model, (0.0, 0.0))
+    ensure_price(model)
     answer, tin, tout, ms = _timed(
         lambda: _deepseek_chat(model, [{"role": "user", "content": question}])
     )
@@ -259,6 +263,7 @@ def run_general(question: str, model: str) -> str:
 
 def run_real_agent(scenario: str, question: str, model: str) -> str:
     """场景分发：各子函数自带 @trace，产生对应 agent 名的 Trace。"""
+    _LAST_HITS[:] = []
     if scenario == "通用问答":
         return run_general(question, model)
     if scenario == "知源 · RAG 问答":

@@ -22,25 +22,9 @@ for _p in (_REPO_ROOT, _APP_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from env_loader import load_dotenv  # noqa: E402
 
-def _load_dotenv() -> None:
-    """从项目根 .env 注入环境变量（不依赖 python-dotenv）。"""
-    dotenv = os.path.join(_REPO_ROOT, ".env")
-    if not os.path.exists(dotenv):
-        return
-    with open(dotenv, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip().strip('"').strip("'")
-            if key and os.environ.get(key) is None:
-                os.environ[key] = value
-
-
-_load_dotenv()
+load_dotenv()
 
 from agent_ops.storage import SQLiteStore  # noqa: E402
 from agent_ops.tracer import Collector  # noqa: E402

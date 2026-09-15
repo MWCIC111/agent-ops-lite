@@ -25,6 +25,7 @@ EXCLUDE_DIRS = {".git", "__pycache__", ".workbuddy", ".idea", ".vscode"}
 EXCLUDE_EXTS = {".pyc", ".db", ".pkl", ".bak"}
 EXCLUDE_NAMES = {
     ".env", ".env.example", "reviewed.jsonl", "seed.log", ".seed.lock",
+    "operations.log",
     # 离线消融基线语料（7.6MB）：只有 scripts/eval_rag.py 做对照时才用，
     # 服务器上跑 demo 用不到；默认语料是 docs_ivd_section.jsonl。
     "docs_ivd_naive.jsonl",

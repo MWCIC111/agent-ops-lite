@@ -64,7 +64,7 @@ ans = agent_runner.run_real_agent(
     "研发管家 · 研发问答", "如何设计多 Agent 的共享状态？", "deepseek-chat"
 )
 traces = agent_runner.collector.traces()
-last = traces[-1]
+last = traces[0]
 step_names = [s.name for s in last.steps]
 print("ANSWER_HEAD:", ans[:40].replace("\n", " "))
 print("TRACE_AGENT:", last.agent)

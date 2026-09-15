@@ -37,6 +37,7 @@ if "rolled_back" not in st.session_state:
 
 # ---------- 0.5 联动：读取版本对比页的发布结论 ----------
 decision = sim["release_decision"]
+carried = st.session_state.pop("carry_decision", False)
 if decision == "暂缓发布":
     st.error("🚫 **联动提醒（来自版本对比页）**：A/B 结论为「暂缓发布」——"
              "v1.1 未见明显优势，放量按钮已禁用，请先定位根因再评估。", icon="🚫")
@@ -48,6 +49,8 @@ elif decision == "全量发布":
                "当前灰度目标为 100%，按阶段推进即可。", icon="🔗")
 else:
     st.caption("🔗 联动提示：先到「版本对比」页跑 A/B 测试，结论会自动带到这里。")
+if carried:
+    st.success(f"✅ 已接收「版本对比」页结论：{decision or '暂无结论'}，放量控制台已按此联动。")
 
 # ---------- 1. 放量阶段定义 ----------
 # 真实场景中：每阶段从线上监控聚合该阶段的实际指标，健康阈值由 SLO 决定。
@@ -97,6 +100,10 @@ with c1:
     st.session_state.abnormal = st.toggle(
         "模拟异常：本阶段错误率飙升", value=st.session_state.abnormal)
     sim["canary_abnormal"] = st.session_state.abnormal  # 同步到全局
+    if st.session_state.abnormal:
+        # 模拟异常即触发自动回滚，状态同步给本页与首页横幅
+        st.session_state.rolled_back = True
+        sim["rolled_back"] = True
 with c2:
     blocked = decision == "暂缓发布" or sim["canary_stage"] >= 2
     if st.button("➡️ 推进下一阶段", disabled=blocked, width="stretch",

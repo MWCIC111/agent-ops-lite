@@ -178,7 +178,7 @@ if _rmode == "real":
         for a, c in cnt.most_common()
     ]
     st.dataframe(pd.DataFrame(stats_rows), width="stretch", hide_index=True)
-    st.caption(f"共 {len(_real_traces)} 条真实 Trace 已落库；与上方架构图的 Agent 一一对应。")
+    st.caption(f"共 {len(_real_traces)} 条真实 Trace 已落库；上图节点为架构示意，本表统计真实 Trace 的场景级 Agent。")
 else:
     st.caption("💡 运行「真实 Agent」或「数据管理」页播种真实数据后，此处展示各 Agent 的真实调用统计。")
 
